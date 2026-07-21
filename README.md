@@ -4,6 +4,8 @@
 
 Mura accepts a family recording, preserves the original transcript, cleans it with DeepSeek, and extracts people, relationships, events, stories, and review questions. Every fact keeps a link to the exact transcript segment it came from.
 
+This repository contains the complete application: the bilingual Next.js frontend, FastAPI Core, production long-form ML pipeline, storage layer, and Kaggle ASR worker.
+
 ## What is production-ready
 
 - Russian, Kazakh, and mixed-language transcripts.
@@ -58,6 +60,17 @@ alembic upgrade head
 uvicorn apps.api.main:app --reload --port 8001
 ```
 
+Start the web application in another terminal:
+
+```bash
+cd apps/web
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+For local development set `MURA_API_URL=http://127.0.0.1:8001` in `apps/web/.env.local`. The web app also supports a server-only DeepSeek fallback when Core is temporarily unavailable; it uses real browser speech recognition and never displays a scripted transcript.
+
 For a local hackathon run, `DATABASE_AUTO_CREATE=true` is convenient. Production should run migrations explicitly and set it to `false`. API docs are available at `http://localhost:8001/docs`.
 
 ## API flow
@@ -107,6 +120,7 @@ Frozen results live in [`docs/baselines/current_main.md`](docs/baselines/current
 
 ```text
 apps/api/                 FastAPI Core
+apps/web/                 Russian/Kazakh Next.js application
 services/kaggle_asr/      GPU ASR worker
 src/mura/deepseek/        DeepSeek client, prompts, cleaner, extractor
 src/mura/orchestration/   Recording and job orchestration
