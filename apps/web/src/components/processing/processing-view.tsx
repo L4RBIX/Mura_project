@@ -2,17 +2,19 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { InitialsAvatar } from "@/components/ui/initials-avatar";
+import { useEffect, useMemo, useState } from "react";
+import { getSavedMemory, type SavedMemory } from "@/lib/memory-store";
 import { useMuraI18n } from "@/lib/i18n";
-import type { Person } from "@/lib/types";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
-/** The recording that just “finished” on the previous screen. */
-const STORY_ID = "mothers-bread";
-
-function PersonChip({ person, delay }: { person: Person; delay: number }) {
+function NameChip({ name, delay }: { name: string; delay: number }) {
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
   return (
     <motion.span
       className="flex items-center gap-2 rounded-full bg-raised py-1.5 pl-1.5 pr-4 shadow-soft"
@@ -20,36 +22,45 @@ function PersonChip({ person, delay }: { person: Person; delay: number }) {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ delay, type: "spring", stiffness: 300, damping: 22 }}
     >
-      <InitialsAvatar person={person} size={26} />
-      <span className="text-[14px] font-semibold">{person.name}</span>
+      <span className="flex size-7 items-center justify-center rounded-full bg-clay text-[10px] font-bold">
+        {initials}
+      </span>
+      <span className="text-[14px] font-semibold">{name}</span>
     </motion.span>
   );
 }
 
 export function ProcessingView() {
-  const { getStory, peopleInStory, t } = useMuraI18n();
+  const { locale, t } = useMuraI18n();
   const steps = [t("processingListen"), t("processingPeople"), t("processingPlace")];
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get("job");
   const recordingId = searchParams.get("recording");
+  const memoryId = searchParams.get("memory");
+  const [memory, setMemory] = useState<SavedMemory | null>(null);
   const [step, setStep] = useState(0);
   const [failed, setFailed] = useState(false);
-  const story = getStory(STORY_ID)!;
-  const mentioned = peopleInStory(story).slice(0, 2);
 
   useEffect(() => {
-    if (jobId) return;
+    if (memoryId) setMemory(getSavedMemory(memoryId));
+  }, [memoryId]);
+
+  useEffect(() => {
+    if (jobId || !memoryId) return;
     const timers = [
-      setTimeout(() => setStep(1), 1600),
-      setTimeout(() => setStep(2), 3300),
-      setTimeout(() => router.replace(`/tree?new=${story.id}`), 5400),
+      window.setTimeout(() => setStep(1), 600),
+      window.setTimeout(() => setStep(2), 1300),
+      window.setTimeout(
+        () => router.replace(`/story/${encodeURIComponent(memoryId)}`),
+        2100,
+      ),
     ];
-    return () => timers.forEach(clearTimeout);
-  }, [jobId, router, story.id]);
+    return () => timers.forEach(window.clearTimeout);
+  }, [jobId, memoryId, router]);
 
   useEffect(() => {
-    if (!jobId || !recordingId) return;
+    if (!jobId || !recordingId || !memoryId) return;
     let cancelled = false;
     const poll = async () => {
       try {
@@ -73,7 +84,7 @@ export function ProcessingView() {
           );
           if (result.ok) {
             sessionStorage.setItem("mura-latest-result", await result.text());
-            router.replace(`/tree?new=${story.id}`);
+            router.replace(`/story/${encodeURIComponent(memoryId)}`);
           }
         }
       } catch {
@@ -86,7 +97,15 @@ export function ProcessingView() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [jobId, recordingId, router, story.id]);
+  }, [jobId, memoryId, recordingId, router]);
+
+  const dateLabel = useMemo(() => {
+    if (!memory) return "";
+    return new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-RU", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(memory.createdAt));
+  }, [locale, memory]);
 
   return (
     <div className="relative flex h-dvh flex-col items-center justify-center px-8">
@@ -103,70 +122,35 @@ export function ProcessingView() {
         </motion.h1>
       </AnimatePresence>
 
-      {/* The memory being placed: story node above, family nodes joining it. */}
-      <div className="relative mt-14 h-[200px] w-[280px]">
-        <motion.div
-          className="absolute left-1/2 top-0 -translate-x-1/2"
+      <div className="relative mt-14 flex min-h-[200px] w-[280px] flex-col items-center">
+        <motion.span
+          className="flex max-w-[260px] items-center gap-2.5 rounded-full bg-raised py-2 pl-3 pr-4 shadow-soft"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.6, ease: EASE }}
         >
-          <span className="flex max-w-[240px] items-center gap-2.5 rounded-full bg-raised py-2 pl-3 pr-4 shadow-soft">
-            <span className="size-2.5 shrink-0 animate-pulse rounded-full bg-clay" />
-            <span className="truncate text-[13px] font-semibold">
-              {story.title}
-            </span>
+          <span className="size-2.5 shrink-0 animate-pulse rounded-full bg-clay" />
+          <span className="truncate text-[13px] font-semibold">
+            {memory?.title ?? t("newMemory")}
           </span>
-        </motion.div>
+        </motion.span>
 
-        <svg
-          aria-hidden
-          viewBox="0 0 280 200"
-          className="absolute inset-0 size-full"
-        >
-          {step >= 1 &&
-            [
-              "M 140 52 C 140 105, 70 100, 70 140",
-              "M 140 52 C 140 105, 210 100, 210 140",
-            ].map((d, i) => (
-              <motion.path
-                key={d}
-                d={d}
-                fill="none"
-                stroke="#8a857d"
-                strokeOpacity={0.5}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ delay: i * 0.15, duration: 0.6, ease: "easeInOut" }}
-              />
+        {step >= 1 && memory && memory.people.length > 0 && (
+          <div className="mt-14 flex flex-wrap justify-center gap-2">
+            {memory.people.slice(0, 3).map((person, index) => (
+              <NameChip key={`${person.name}-${index}`} name={person.name} delay={0.2 + index * 0.12} />
             ))}
-        </svg>
-
-        {step >= 1 && (
-          <>
-            <div className="absolute left-[70px] top-[150px] -translate-x-1/2">
-              <PersonChip person={mentioned[0]} delay={0.35} />
-            </div>
-            {mentioned[1] && (
-              <div className="absolute left-[210px] top-[150px] -translate-x-1/2">
-                <PersonChip person={mentioned[1]} delay={0.5} />
-              </div>
-            )}
-          </>
+          </div>
         )}
       </div>
 
       <div className="h-12">
-        {step >= 2 && !failed && (
+        {step >= 2 && !failed && dateLabel && (
           <motion.span
             className="inline-block rounded-full bg-sand px-4 py-1.5 text-[13px] font-medium text-ink/70"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: EASE }}
           >
-            {story.era}
+            {dateLabel}
           </motion.span>
         )}
       </div>

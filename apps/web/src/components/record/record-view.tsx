@@ -13,6 +13,7 @@ import { useRecorder } from "@/hooks/use-recorder";
 import { formatTimer } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMuraI18n } from "@/lib/i18n";
+import { saveMemory, type SavedMemory } from "@/lib/memory-store";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
@@ -37,7 +38,7 @@ export function RecordView() {
   const router = useRouter();
   const { status, seconds, level, error: recorderError, start, pause, resume, restart, finish: finishAudio } = useRecorder();
   const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<"upload" | "no_speech" | null>(null);
+  const [uploadError, setUploadError] = useState<"upload" | null>(null);
   const { sentences, reset, supported, error: recognitionError } = useLiveTranscript(
     locale,
     status === "recording",
@@ -60,6 +61,19 @@ export function RecordView() {
       return;
     }
     const extension = audio.type.includes("mp4") ? "m4a" : "webm";
+    const transcript = sentences.map((sentence) => sentence.text).join(" ").trim();
+    const memoryId = `local-${crypto.randomUUID()}`;
+    const baseMemory: SavedMemory = {
+      id: memoryId,
+      createdAt: new Date().toISOString(),
+      locale,
+      title: t("audioMemoryTitle"),
+      summary: transcript || t("transcriptUnavailable"),
+      transcript,
+      people: [],
+      durationSec: seconds,
+      source: "audio_only",
+    };
     const form = new FormData();
     form.append("file", audio, `mura-recording.${extension}`);
     form.append("family_id", "family_mura_app");
@@ -69,17 +83,16 @@ export function RecordView() {
       const response = await fetch("/api/mura/v1/recordings", { method: "POST", body: form });
       if (response.ok) {
         const accepted = (await response.json()) as { recording_id: string; job_id: string };
+        await saveMemory({ ...baseMemory, source: "mura_core" }, audio);
         router.push(
-          `/processing?job=${encodeURIComponent(accepted.job_id)}&recording=${encodeURIComponent(accepted.recording_id)}`,
+          `/processing?job=${encodeURIComponent(accepted.job_id)}&recording=${encodeURIComponent(accepted.recording_id)}&memory=${encodeURIComponent(memoryId)}`,
         );
         return;
       }
       if (![502, 503].includes(response.status)) throw new Error("upload_failed");
-
-      const transcript = sentences.map((sentence) => sentence.text).join(" ").trim();
       if (!transcript) {
-        setUploadError("no_speech");
-        setUploading(false);
+        await saveMemory(baseMemory, audio);
+        router.push(`/processing?memory=${encodeURIComponent(memoryId)}`);
         return;
       }
       const fallback = await fetch("/api/analyze", {
@@ -87,9 +100,30 @@ export function RecordView() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ transcript, locale }),
       });
-      if (!fallback.ok) throw new Error("analysis_failed");
-      sessionStorage.setItem("mura-latest-result", await fallback.text());
-      router.push("/processing?local=1");
+      if (!fallback.ok) {
+        await saveMemory(baseMemory, audio);
+        router.push(`/processing?memory=${encodeURIComponent(memoryId)}`);
+        return;
+      }
+      const analysis = (await fallback.json()) as {
+        title?: string;
+        summary?: string;
+        people?: Array<{ name?: string; relationship?: string }>;
+      };
+      const memory: SavedMemory = {
+        ...baseMemory,
+        title: analysis.title?.trim() || baseMemory.title,
+        summary: analysis.summary?.trim() || baseMemory.summary,
+        people: (analysis.people ?? [])
+          .filter((person) => person.name?.trim())
+          .map((person) => ({
+            name: person.name!.trim(),
+            relationship: person.relationship?.trim() ?? "",
+          })),
+        source: "deepseek_fallback",
+      };
+      await saveMemory(memory, audio);
+      router.push(`/processing?memory=${encodeURIComponent(memoryId)}`);
     } catch {
       setUploadError("upload");
       setUploading(false);
@@ -140,7 +174,7 @@ export function RecordView() {
               <p className="max-w-[320px] text-[13px] leading-relaxed text-red-700">
                 {recorderError
                   ? t("microphoneError")
-                  : t(uploadError === "no_speech" ? "noSpeechError" : "uploadError")}
+                  : t("uploadError")}
               </p>
             )}
           </motion.div>

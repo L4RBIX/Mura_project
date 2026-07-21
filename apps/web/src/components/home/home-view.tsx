@@ -22,10 +22,16 @@ const item = {
 };
 
 export function HomeView() {
-  const { narrator, stories, greetingForHour, t, locale } = useMuraI18n();
+  const { narrator, greetingForHour, t, locale } = useMuraI18n();
+  const [savedStories, setSavedStories] = useState<import("@/lib/types").Story[]>([]);
   // Set after mount so the prerendered greeting never mismatches the client.
   const [greeting, setGreeting] = useState(() => greetingForHour(13));
   useEffect(() => setGreeting(greetingForHour(new Date().getHours())), [greetingForHour, locale]);
+  useEffect(() => {
+    void import("@/lib/memory-store").then(({ getSavedMemories, savedMemoryToStory }) => {
+      setSavedStories(getSavedMemories().map(savedMemoryToStory));
+    });
+  }, []);
 
   return (
     <motion.div
@@ -60,9 +66,14 @@ export function HomeView() {
           {t("recentRecordings")}
         </h2>
         <div className="mt-4 space-y-3">
-          {stories.map((story) => (
+          {savedStories.map((story) => (
             <MemoryCard key={story.id} story={story} />
           ))}
+          {savedStories.length === 0 && (
+            <p className="rounded-[24px] bg-raised p-5 text-[14px] text-muted shadow-soft">
+              {t("noSavedMemories")}
+            </p>
+          )}
         </div>
       </motion.section>
     </motion.div>

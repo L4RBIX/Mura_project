@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { StoryView } from "@/components/story/story-view";
+import { LocalStoryView } from "@/components/story/local-story-view";
 import { getStory, stories } from "@/data";
 
 interface StoryPageProps {
@@ -21,6 +22,7 @@ export async function generateMetadata({
 export default async function StoryPage({ params }: StoryPageProps) {
   const { id } = await params;
   const story = getStory(id);
+  if (!story && id.startsWith("local-")) return <LocalStoryView memoryId={id} />;
   if (!story) notFound();
   return <StoryView story={story} />;
 }
