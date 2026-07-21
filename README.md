@@ -71,6 +71,8 @@ npm run dev
 
 For local development set `MURA_API_URL=http://127.0.0.1:8001` in `apps/web/.env.local`. The web app also supports a server-only DeepSeek fallback when Core is temporarily unavailable; it uses real browser speech recognition and never displays a scripted transcript.
 
+For Vercel, connect this repository and set **Root Directory** to `apps/web`. Add `DEEPSEEK_API_KEY` as a server-only environment variable; add `MURA_API_URL` and `MURA_CORE_API_KEY` when a public Core deployment is available.
+
 For a local hackathon run, `DATABASE_AUTO_CREATE=true` is convenient. Production should run migrations explicitly and set it to `false`. API docs are available at `http://localhost:8001/docs`.
 
 ## API flow
