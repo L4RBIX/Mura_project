@@ -26,6 +26,7 @@ interface SpeechRecognitionErrorEventLike extends Event {
 interface SpeechRecognitionLike {
   continuous: boolean;
   interimResults: boolean;
+  maxAlternatives: number;
   lang: string;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
@@ -64,9 +65,12 @@ export function useLiveTranscript(locale: Locale, listening: boolean) {
     if (!Recognition) return;
 
     const recognition = new Recognition();
+    const languageOptions = locale === "kk" ? ["kk-KZ", "kk"] : ["ru-RU", "ru"];
+    let languageIndex = 0;
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = locale === "kk" ? "kk-KZ" : "ru-RU";
+    recognition.maxAlternatives = 1;
+    recognition.lang = languageOptions[languageIndex];
     recognition.onresult = (event) => {
       const completed: string[] = [];
       let interim = "";
@@ -85,6 +89,12 @@ export function useLiveTranscript(locale: Locale, listening: boolean) {
     };
     recognition.onerror = (event) => {
       if (event.error === "no-speech" || event.error === "aborted") return;
+      if (event.error === "language-not-supported" && languageIndex < languageOptions.length - 1) {
+        languageIndex += 1;
+        recognition.lang = languageOptions[languageIndex];
+        setError(null);
+        return;
+      }
       setError(event.error);
     };
     recognition.onend = () => {

@@ -3,12 +3,14 @@
 import { motion } from "framer-motion";
 import { Play, Waypoints } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { Button } from "@/components/ui/button";
 import { Highlight } from "@/components/ui/highlight";
 import { InitialsAvatar } from "@/components/ui/initials-avatar";
 import { formatDuration } from "@/lib/format";
 import { useMuraI18n } from "@/lib/i18n";
+import { getSavedMemories, savedMemoryToStory } from "@/lib/memory-store";
 import { toneBg } from "@/lib/tones";
 import type { Person, Story } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -94,9 +96,23 @@ function EmptyTimeline({ person }: { person: Person }) {
 }
 
 export function PersonView({ person }: { person: Person }) {
-  const { narrator, storiesForPerson, getPerson, formatYears, t } = useMuraI18n();
+  const { narrator, getPerson, formatYears, t } = useMuraI18n();
   const currentPerson = getPerson(person.id) ?? person;
-  const personStories = storiesForPerson(currentPerson.id);
+  const [personStories, setPersonStories] = useState<Story[]>([]);
+
+  useEffect(() => {
+    const normalizedNames = new Set(
+      [currentPerson.name, currentPerson.nativeName].map((name) => name.trim().toLocaleLowerCase()),
+    );
+    const memories = getSavedMemories().filter(
+      (memory) =>
+        currentPerson.isNarrator ||
+        memory.people.some((mentioned) =>
+          normalizedNames.has(mentioned.name.trim().toLocaleLowerCase()),
+        ),
+    );
+    setPersonStories(memories.map(savedMemoryToStory));
+  }, [currentPerson.isNarrator, currentPerson.name, currentPerson.nativeName]);
 
   return (
     <div className="pb-16">
@@ -137,7 +153,7 @@ export function PersonView({ person }: { person: Person }) {
           variants={item}
           className="mt-7 text-[19px] leading-[1.55] text-ink/85"
         >
-          <Summary person={currentPerson} />
+          {currentPerson.isNarrator ? t("archiveOwnerSummary") : <Summary person={currentPerson} />}
         </motion.p>
 
         <motion.section variants={item} className="mt-12">

@@ -2,10 +2,12 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Highlight } from "@/components/ui/highlight";
 import { InitialsAvatar } from "@/components/ui/initials-avatar";
 import { useMuraI18n } from "@/lib/i18n";
+import { getSavedMemories } from "@/lib/memory-store";
 import type { Person } from "@/lib/types";
 
 interface PersonSheetProps {
@@ -29,11 +31,25 @@ function SummaryText({ person }: { person: Person }) {
 }
 
 export function PersonSheet({ personId, centerId, onClose, onCenter }: PersonSheetProps) {
-  const { getPerson, storiesForPerson, relationLabel, formatYears, t } = useMuraI18n();
+  const { getPerson, relationLabel, formatYears, t } = useMuraI18n();
   const person = personId ? getPerson(personId) : undefined;
   const center = getPerson(centerId);
   const isCenter = personId === centerId;
-  const memoryCount = person ? storiesForPerson(person.id).length : 0;
+  const [memoryCount, setMemoryCount] = useState(0);
+  useEffect(() => {
+    if (!person) {
+      setMemoryCount(0);
+      return;
+    }
+    const names = new Set([person.name, person.nativeName].map((name) => name.toLocaleLowerCase()));
+    setMemoryCount(
+      getSavedMemories().filter(
+        (memory) =>
+          person.isNarrator ||
+          memory.people.some((mentioned) => names.has(mentioned.name.toLocaleLowerCase())),
+      ).length,
+    );
+  }, [person]);
 
   return (
     <AnimatePresence>

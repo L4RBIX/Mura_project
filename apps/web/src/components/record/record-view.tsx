@@ -141,14 +141,14 @@ export function RecordView() {
         title={t("newMemory")}
         fallbackHref="/home"
         right={
-          status !== "idle" ? (
+          status !== "idle" || uploading ? (
             <TimerChip seconds={seconds} recording={status === "recording"} />
           ) : undefined
         }
       />
 
       <AnimatePresence mode="wait">
-        {status === "idle" ? (
+        {status === "idle" && !uploading ? (
           <motion.div
             key="idle"
             className="flex flex-1 flex-col items-center justify-center gap-14 px-8 pb-24 text-center"
@@ -195,13 +195,15 @@ export function RecordView() {
             />
             <div className="shrink-0 pb-[max(env(safe-area-inset-bottom),20px)] pt-4">
               <Waveform active={status === "recording"} level={level} className="mb-5" />
-              <RecordControls
-                paused={status === "paused"}
-                onPause={pause}
-                onResume={resume}
-                onRestart={handleRestart}
-                onFinish={finish}
-              />
+              {!uploading && (
+                <RecordControls
+                  paused={status === "paused"}
+                  onPause={pause}
+                  onResume={resume}
+                  onRestart={handleRestart}
+                  onFinish={finish}
+                />
+              )}
               {uploading && (
                 <p className="mt-3 text-center text-[13px] font-medium text-muted">
                   {t("uploading")}

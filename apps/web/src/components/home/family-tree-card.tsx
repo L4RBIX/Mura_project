@@ -2,11 +2,15 @@
 
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useMuraI18n } from "@/lib/i18n";
+import { getSavedMemories } from "@/lib/memory-store";
 
 /** Quiet doorway from the home screen into the tree. */
 export function FamilyTreeCard() {
-  const { people, stories, t } = useMuraI18n();
+  const { people, t } = useMuraI18n();
+  const [memoryCount, setMemoryCount] = useState(0);
+  useEffect(() => setMemoryCount(getSavedMemories().length), []);
   return (
     <Link
       href="/tree"
@@ -20,7 +24,7 @@ export function FamilyTreeCard() {
       <span className="min-w-0 flex-1">
         <span className="block text-[16px] font-semibold">{t("familyTree")}</span>
         <span className="block text-[13px] text-muted">
-          {people.length} {t("people")} · {stories.length} {t("memories")}
+          {people.length} {t("people")} · {memoryCount} {t("memories")}
         </span>
       </span>
       <ChevronRight className="size-5 shrink-0 text-muted" strokeWidth={2} />
