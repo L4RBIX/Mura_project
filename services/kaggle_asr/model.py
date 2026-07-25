@@ -44,12 +44,16 @@ class GigaAMTranscriber:
         import torch
         from silero_vad import load_silero_vad
         from transformers import AutoModel
+        from transformers.utils import logging as transformers_logging
 
         if self.loaded:
             return
         if not torch.cuda.is_available() and self.device.startswith("cuda"):
             raise RuntimeError("CUDA is not available")
 
+        # Hundreds of per-parameter progress updates can saturate Jupyter's
+        # output channel and block the model-loading subprocess.
+        transformers_logging.disable_progress_bar()
         artifacts = download_pinned_snapshot(token=self.hf_token)
         vad_version = verify_silero_version()
         # The upstream architecture requires custom Transformers code. Mura never executes it from
