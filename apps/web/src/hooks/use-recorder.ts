@@ -118,6 +118,16 @@ export function useRecorder() {
     });
   }, [stopTracks]);
 
+  const snapshot = useCallback((): Blob | null => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive" || chunksRef.current.length === 0) {
+      return null;
+    }
+    return new Blob(chunksRef.current, {
+      type: recorder.mimeType || "audio/webm",
+    });
+  }, []);
+
   const restart = useCallback(async () => {
     const recorder = recorderRef.current;
     setStatus("idle");
@@ -142,5 +152,16 @@ export function useRecorder() {
     [stopTracks],
   );
 
-  return { status, seconds, level, error, start, pause, resume, restart, finish };
+  return {
+    status,
+    seconds,
+    level,
+    error,
+    start,
+    pause,
+    resume,
+    restart,
+    finish,
+    snapshot,
+  };
 }

@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { LiveTranscript } from "@/components/record/live-transcript";
 import { RecordButton } from "@/components/record/record-button";
@@ -14,6 +14,7 @@ import { formatTimer } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMuraI18n } from "@/lib/i18n";
 import { requestMuraTranscription } from "@/lib/mura-asr-client";
+import type { MuraTranscriptEnvelope } from "@/lib/mura-api-types";
 import { isMuraExtractionConfigured } from "@/lib/mura-client";
 import {
   createExtractionRequestFromTranscript,
@@ -46,17 +47,81 @@ function TimerChip({ seconds, recording }: { seconds: number; recording: boolean
 export function RecordView() {
   const { locale, narrator, t } = useMuraI18n();
   const router = useRouter();
-  const { status, seconds, level, error: recorderError, start, pause, resume, restart, finish: finishAudio } = useRecorder();
+  const {
+    status,
+    seconds,
+    level,
+    error: recorderError,
+    start,
+    pause,
+    resume,
+    restart,
+    finish: finishAudio,
+    snapshot: snapshotAudio,
+  } = useRecorder();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<"upload" | null>(null);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [liveRecognitionActive, setLiveRecognitionActive] = useState(false);
+  const recordingIdRef = useRef<string | null>(null);
+  const liveRequestRef = useRef<Promise<MuraTranscriptEnvelope | null> | null>(null);
+  const lastLiveAudioSizeRef = useRef(0);
+  const finishingRef = useRef(false);
 
   const startRecording = async () => {
     setUploadError(null);
+    setLiveTranscript("");
+    lastLiveAudioSizeRef.current = 0;
+    finishingRef.current = false;
+    recordingIdRef.current = `rec_${crypto.randomUUID()}`;
     await start();
   };
 
+  useEffect(() => {
+    if (status !== "recording" || uploading) return;
+
+    const transcribeCurrentAudio = () => {
+      if (finishingRef.current || liveRequestRef.current) return;
+      const audio = snapshotAudio();
+      const recordingId = recordingIdRef.current;
+      if (
+        !audio ||
+        !recordingId ||
+        audio.size < 1_024 ||
+        audio.size === lastLiveAudioSizeRef.current
+      ) {
+        return;
+      }
+
+      lastLiveAudioSizeRef.current = audio.size;
+      setLiveRecognitionActive(true);
+      const request = requestMuraTranscription(audio, recordingId)
+        .then((transcript) => {
+          const text = transcript.full_text.trim();
+          if (text) setLiveTranscript(text);
+          return transcript;
+        })
+        .catch(() => null)
+        .finally(() => {
+          if (liveRequestRef.current === request) {
+            liveRequestRef.current = null;
+            setLiveRecognitionActive(false);
+          }
+        });
+      liveRequestRef.current = request;
+    };
+
+    const firstRequest = window.setTimeout(transcribeCurrentAudio, 3_500);
+    const interval = window.setInterval(transcribeCurrentAudio, 6_500);
+    return () => {
+      window.clearTimeout(firstRequest);
+      window.clearInterval(interval);
+    };
+  }, [snapshotAudio, status, uploading]);
+
   const finish = async () => {
-    if (seconds <= 0 || uploading) return;
+    if (uploading) return;
+    finishingRef.current = true;
     setUploading(true);
     setUploadError(null);
     const audio = await finishAudio();
@@ -67,7 +132,8 @@ export function RecordView() {
     }
     try {
       const memoryId = `local-${crypto.randomUUID()}`;
-      const recordingId = `rec_${crypto.randomUUID()}`;
+      const recordingId =
+        recordingIdRef.current ?? `rec_${crypto.randomUUID()}`;
       const createdAt = new Date().toISOString();
       const speakerName = narrator.name.trim() || t("genericNarrator");
       const speakerId = getOrCreateLocalSpeakerId();
@@ -101,6 +167,9 @@ export function RecordView() {
 
       let resolvedMemory = memory;
       try {
+        // Kaggle processes one GPU request at a time. Let an in-flight live
+        // preview finish before submitting the complete, authoritative audio.
+        await liveRequestRef.current;
         const asrTranscript = await requestMuraTranscription(audio, recordingId);
         const asrExtractionRequest = createExtractionRequestFromTranscript({
           transcript: asrTranscript,
@@ -151,6 +220,11 @@ export function RecordView() {
   };
 
   const handleRestart = () => {
+    setLiveTranscript("");
+    setLiveRecognitionActive(false);
+    lastLiveAudioSizeRef.current = 0;
+    finishingRef.current = false;
+    recordingIdRef.current = `rec_${crypto.randomUUID()}`;
     void restart();
   };
 
@@ -206,7 +280,17 @@ export function RecordView() {
             transition={{ duration: 0.45, ease: EASE }}
           >
             <LiveTranscript
-              sentences={[]}
+              sentences={
+                liveTranscript
+                  ? [{
+                      id: "gigaam-live",
+                      text: liveTranscript,
+                      complete: false,
+                      startSec: 0,
+                      endSec: seconds,
+                    }]
+                  : []
+              }
               listening={status === "recording"}
               supported={null}
               recognitionError={null}
@@ -226,7 +310,12 @@ export function RecordView() {
               )}
               {uploading && (
                 <p className="mt-3 text-center text-[13px] font-medium text-muted">
-                  {t("uploading")}
+                  {t("recognizingSpeech")}
+                </p>
+              )}
+              {!uploading && liveRecognitionActive && (
+                <p className="mt-3 text-center text-[13px] font-medium text-muted">
+                  {t("recognizingLive")}
                 </p>
               )}
             </div>
