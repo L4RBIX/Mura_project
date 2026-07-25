@@ -147,6 +147,8 @@ export function RecordView() {
         recordingId,
         createdAt,
         locale,
+        narratorPersonId: narrator.id,
+        narratorName: speakerName,
         title,
         summary: t("transcriptUnavailable"),
         transcript: "",

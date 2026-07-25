@@ -22,6 +22,8 @@ export interface SavedMemory {
   recordingId: string;
   createdAt: string;
   locale: Locale;
+  narratorPersonId: string;
+  narratorName: string;
   title: string;
   summary: string;
   transcript: string;
@@ -190,6 +192,8 @@ export function normalizeSavedMemory(value: unknown): SavedMemory | null {
     recordingId: stringValue(value.recordingId) || extraction?.recording_id || id,
     createdAt,
     locale,
+    narratorPersonId: stringValue(value.narratorPersonId),
+    narratorName: stringValue(value.narratorName),
     title,
     summary: stringValue(value.summary) || transcript,
     transcript,
@@ -219,6 +223,7 @@ export function savedMemoryToStory(memory: SavedMemory): Story {
   const date = new Date(memory.createdAt);
   return {
     id: memory.id,
+    narratorId: memory.narratorPersonId || "aisulu",
     title: memory.title,
     era: date.toLocaleDateString(memory.locale === "kk" ? "kk-KZ" : "ru-RU"),
     recordedLabel: date.toLocaleTimeString(memory.locale === "kk" ? "kk-KZ" : "ru-RU", {

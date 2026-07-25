@@ -5,6 +5,8 @@ import { Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScreenHeader } from "@/components/layout/screen-header";
+import { FavoriteMemoryButton } from "@/components/story/favorite-memory-button";
+import { MemoryPhotoGallery } from "@/components/story/memory-photo-gallery";
 import { TranscriptReader } from "@/components/story/transcript-reader";
 import { formatDuration } from "@/lib/format";
 import {
@@ -108,7 +110,7 @@ function EvidenceLinks({
 }
 
 export function LocalStoryView({ memoryId }: { memoryId: string }) {
-  const { locale, t } = useMuraI18n();
+  const { locale, narrator, t } = useMuraI18n();
   const router = useRouter();
   const [memory, setMemory] = useState<SavedMemory | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -228,6 +230,9 @@ export function LocalStoryView({ memoryId }: { memoryId: string }) {
         <h1 className="mt-2 text-[34px] font-bold leading-[1.1] tracking-[-0.03em]">
           {memory.title}
         </h1>
+        <p className="mt-3 text-[14px] text-muted">
+          {t("narratorLabel")}: {memory.narratorName || narrator.name}
+        </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-[14px] text-muted">
             {formatDuration(memory.durationSec)}
@@ -238,6 +243,12 @@ export function LocalStoryView({ memoryId }: { memoryId: string }) {
             <Badge key={language}>{language}</Badge>
           ))}
         </div>
+
+        <FavoriteMemoryButton
+          memoryId={memory.id}
+          ownerPersonId={narrator.id}
+          className="mt-6"
+        />
 
         {audioUrl && (
           <div className="mt-7 rounded-[28px] bg-raised p-5 shadow-card">
@@ -323,6 +334,8 @@ export function LocalStoryView({ memoryId }: { memoryId: string }) {
           )}
         </section>
 
+        <MemoryPhotoGallery memoryId={memory.id} />
+
         {extraction && extraction.people.length > 0 && (
           <section className="mt-12">
             <SectionTitle>{t("peopleSection")}</SectionTitle>
@@ -403,7 +416,7 @@ export function LocalStoryView({ memoryId }: { memoryId: string }) {
 
         {extraction && extraction.events.length > 0 && (
           <section className="mt-12">
-            <SectionTitle>{t("eventsSection")}</SectionTitle>
+            <SectionTitle>{t("timeline")}</SectionTitle>
             <div className="mt-4 space-y-3">
               {extraction.events.map((event) => {
                 const participants = event.participant_person_ids.map(

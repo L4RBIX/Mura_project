@@ -23,6 +23,8 @@ export interface Person {
 
 export interface Story {
   id: string;
+  /** Family member whose voice tells the memory. */
+  narratorId: string;
   title: string;
   /** Era the AI estimated from context: “Winter 1954 · estimated”. */
   era: string;

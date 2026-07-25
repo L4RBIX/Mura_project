@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Heart } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MemoryCard } from "@/components/home/memory-card";
 import { FamilyTreeCard } from "@/components/home/family-tree-card";
@@ -59,6 +61,16 @@ export function HomeView() {
 
       <motion.div variants={item}>
         <FamilyTreeCard />
+      </motion.div>
+
+      <motion.div variants={item} className="mt-4">
+        <Link
+          href="/favorites"
+          className="flex h-12 items-center justify-center gap-2 rounded-full bg-raised text-[13px] font-bold shadow-soft transition-transform active:scale-[0.98]"
+        >
+          <Heart className="size-4" strokeWidth={1.8} />
+          {t("openFavorites")}
+        </Link>
       </motion.div>
 
       <motion.section variants={item} className="mt-10">

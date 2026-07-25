@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { AudioPlayer } from "@/components/story/audio-player";
+import { FavoriteMemoryButton } from "@/components/story/favorite-memory-button";
+import { MemoryPhotoGallery } from "@/components/story/memory-photo-gallery";
 import { TranscriptReader } from "@/components/story/transcript-reader";
 import { InitialsAvatar } from "@/components/ui/initials-avatar";
 import { formatDuration } from "@/lib/format";
@@ -25,8 +27,9 @@ const item = {
 };
 
 export function StoryView({ story }: { story: Story }) {
-  const { narrator, peopleInStory, getStory, t } = useMuraI18n();
+  const { narrator, peopleInStory, getPerson, getStory, t } = useMuraI18n();
   const currentStory = getStory(story.id) ?? story;
+  const storyNarrator = getPerson(currentStory.narratorId) ?? narrator;
   const mentioned = peopleInStory(currentStory);
 
   return (
@@ -54,16 +57,35 @@ export function StoryView({ story }: { story: Story }) {
         </motion.h1>
 
         <motion.p variants={item} className="mt-3 text-[14px] text-muted">
-          {t("toldBy", { name: narrator.name })} · {currentStory.recordedLabel} ·{" "}
+          {t("toldBy", { name: storyNarrator.name })} · {currentStory.recordedLabel} ·{" "}
           {formatDuration(currentStory.durationSec)}
         </motion.p>
+
+        <motion.div variants={item} className="mt-6">
+          <FavoriteMemoryButton
+            memoryId={currentStory.id}
+            ownerPersonId={narrator.id}
+          />
+        </motion.div>
 
         <motion.div variants={item} className="mt-7">
           <AudioPlayer seed={currentStory.id} durationSec={currentStory.durationSec} />
         </motion.div>
 
-        <motion.div variants={item} className="mt-10">
-          <TranscriptReader paragraphs={currentStory.paragraphs} />
+        <motion.section
+          variants={item}
+          className="mt-10 rounded-[28px] bg-clay/55 p-5"
+        >
+          <h2 className="text-[12px] font-semibold uppercase tracking-[0.18em] text-muted">
+            {t("aiSummary")}
+          </h2>
+          <p className="mt-3 text-[18px] font-medium leading-relaxed">
+            {currentStory.excerpt}
+          </p>
+        </motion.section>
+
+        <motion.div variants={item}>
+          <MemoryPhotoGallery memoryId={currentStory.id} />
         </motion.div>
 
         {mentioned.length > 0 && (
@@ -85,6 +107,30 @@ export function StoryView({ story }: { story: Story }) {
             </div>
           </motion.section>
         )}
+
+        <motion.section variants={item} className="mt-12">
+          <h2 className="text-[12px] font-semibold uppercase tracking-[0.18em] text-muted">
+            {t("timeline")}
+          </h2>
+          <div className="ml-1 mt-5 border-l border-ink/10 pl-6">
+            <div className="relative">
+              <span className="absolute -left-[29px] top-1.5 size-2.5 rounded-full bg-clay" />
+              <p className="text-[12px] font-semibold uppercase tracking-[0.15em] text-muted">
+                {currentStory.era}
+              </p>
+              <p className="mt-1.5 text-[16px] font-semibold leading-relaxed">
+                {currentStory.title}
+              </p>
+            </div>
+          </div>
+        </motion.section>
+
+        <motion.div variants={item} className="mt-12">
+          <h2 className="mb-4 text-[12px] font-semibold uppercase tracking-[0.18em] text-muted">
+            {t("transcript")}
+          </h2>
+          <TranscriptReader paragraphs={currentStory.paragraphs} />
+        </motion.div>
       </motion.article>
     </div>
   );

@@ -99,6 +99,8 @@ export function baseMemory(): SavedMemory {
     recordingId: "rec_test",
     createdAt: "2026-07-25T08:00:00.000Z",
     locale: "kk",
+    narratorPersonId: "aisulu",
+    narratorName: "Айсұлу",
     title: "25 шілде күнгі аудио",
     summary: "Менің әкем Сабыр алма бағында жұмыс істеген.",
     transcript: "Менің әкем Сабыр алма бағында жұмыс істеген.",

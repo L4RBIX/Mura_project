@@ -4,6 +4,7 @@ import type { Story } from "@/lib/types";
 export const stories: Story[] = [
   {
     id: "mothers-bread",
+    narratorId: "aisulu",
     title: "The scent of my mother’s bread",
     era: "Winter 1954 · estimated",
     recordedLabel: "Today",
@@ -20,6 +21,7 @@ export const stories: Story[] = [
   },
   {
     id: "blue-bicycle",
+    narratorId: "aisulu",
     title: "Marat’s blue bicycle",
     era: "Summer 1963 · estimated",
     recordedLabel: "Yesterday",
@@ -35,6 +37,7 @@ export const stories: Story[] = [
   },
   {
     id: "apple-orchard",
+    narratorId: "aisulu",
     title: "The apple orchard in Almaty",
     era: "Autumn 1957 · estimated",
     recordedLabel: "Sunday",
@@ -50,6 +53,7 @@ export const stories: Story[] = [
   },
   {
     id: "first-day-school",
+    narratorId: "aisulu",
     title: "Dana’s first day of school",
     era: "September 1979",
     recordedLabel: "Last week",
@@ -65,6 +69,7 @@ export const stories: Story[] = [
   },
   {
     id: "nauryz-table",
+    narratorId: "aisulu",
     title: "Nauryz at our table",
     era: "Spring 1985 · estimated",
     recordedLabel: "12 March",

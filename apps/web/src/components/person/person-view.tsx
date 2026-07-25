@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Play, Waypoints } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ScreenHeader } from "@/components/layout/screen-header";
@@ -10,7 +11,14 @@ import { Highlight } from "@/components/ui/highlight";
 import { InitialsAvatar } from "@/components/ui/initials-avatar";
 import { formatDuration } from "@/lib/format";
 import { useMuraI18n } from "@/lib/i18n";
-import { getSavedMemories, savedMemoryToStory } from "@/lib/memory-store";
+import {
+  getSavedMemories,
+  getSavedMemory,
+  savedMemoryToStory,
+} from "@/lib/memory-store";
+import { useMemoryPhotos } from "@/hooks/use-memory-photos";
+import { MEMORY_FEATURES_CHANGED_EVENT } from "@/lib/memory-features-api";
+import { memoryFeaturesApi } from "@/lib/memory-features-store";
 import { toneBg } from "@/lib/tones";
 import type { Person, Story } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -45,6 +53,7 @@ function Summary({ person }: { person: Person }) {
 
 function StoryTimelineItem({ story, person }: { story: Story; person: Person }) {
   const { t } = useMuraI18n();
+  const { photos } = useMemoryPhotos(story.id);
   return (
     <li className="relative">
       <span
@@ -64,6 +73,18 @@ function StoryTimelineItem({ story, person }: { story: Story; person: Person }) 
         <h3 className="mt-1.5 text-[18px] font-semibold leading-snug">
           {story.title}
         </h3>
+        {photos[0] && (
+          <div className="relative mt-3 aspect-[16/9] overflow-hidden rounded-[20px] bg-raised shadow-soft">
+            <Image
+              src={photos[0].url}
+              alt={photos[0].fileName}
+              fill
+              unoptimized
+              sizes="320px"
+              className="object-cover"
+            />
+          </div>
+        )}
         <p className="mt-1.5 line-clamp-2 text-[15px] leading-relaxed text-muted">
           {story.excerpt}
         </p>
@@ -96,23 +117,77 @@ function EmptyTimeline({ person }: { person: Person }) {
 }
 
 export function PersonView({ person }: { person: Person }) {
-  const { narrator, getPerson, formatYears, t } = useMuraI18n();
+  const {
+    narrator,
+    getPerson,
+    getStory,
+    storiesForPerson,
+    formatYears,
+    t,
+  } = useMuraI18n();
   const currentPerson = getPerson(person.id) ?? person;
   const [personStories, setPersonStories] = useState<Story[]>([]);
+  const [favoriteStories, setFavoriteStories] = useState<Story[]>([]);
 
   useEffect(() => {
-    const normalizedNames = new Set(
-      [currentPerson.name, currentPerson.nativeName].map((name) => name.trim().toLocaleLowerCase()),
-    );
-    const memories = getSavedMemories().filter(
-      (memory) =>
-        currentPerson.isNarrator ||
-        memory.people.some((mentioned) =>
-          normalizedNames.has(mentioned.name.trim().toLocaleLowerCase()),
+    const syncStories = () => {
+      const normalizedNames = new Set(
+        [currentPerson.name, currentPerson.nativeName].map((name) =>
+          name.trim().toLocaleLowerCase(),
         ),
-    );
-    setPersonStories(memories.map(savedMemoryToStory));
-  }, [currentPerson.isNarrator, currentPerson.name, currentPerson.nativeName]);
+      );
+      const localStories = getSavedMemories()
+        .filter(
+          (memory) =>
+            currentPerson.isNarrator ||
+            memory.people.some((mentioned) =>
+              normalizedNames.has(
+                mentioned.name.trim().toLocaleLowerCase(),
+              ),
+            ),
+        )
+        .map(savedMemoryToStory);
+      const favoriteStories = memoryFeaturesApi
+        .listFavorites(currentPerson.id)
+        .map((reference) => {
+          const local = getSavedMemory(reference.memoryId);
+          return local
+            ? savedMemoryToStory(local)
+            : getStory(reference.memoryId);
+        })
+        .filter((story): story is Story => story !== undefined);
+      const combined = [
+        ...localStories,
+        ...storiesForPerson(currentPerson.id),
+      ];
+      setPersonStories(
+        combined.filter(
+          (story, index) =>
+            combined.findIndex((candidate) => candidate.id === story.id) ===
+            index,
+          ),
+      );
+      setFavoriteStories(
+        favoriteStories.filter(
+          (story, index) =>
+            favoriteStories.findIndex(
+              (candidate) => candidate.id === story.id,
+            ) === index,
+        ),
+      );
+    };
+    syncStories();
+    window.addEventListener(MEMORY_FEATURES_CHANGED_EVENT, syncStories);
+    return () =>
+      window.removeEventListener(MEMORY_FEATURES_CHANGED_EVENT, syncStories);
+  }, [
+    currentPerson.id,
+    currentPerson.isNarrator,
+    currentPerson.name,
+    currentPerson.nativeName,
+    getStory,
+    storiesForPerson,
+  ]);
 
   return (
     <div className="pb-16">
@@ -172,6 +247,23 @@ export function PersonView({ person }: { person: Person }) {
             </ol>
           )}
         </motion.section>
+
+        {favoriteStories.length > 0 && (
+          <motion.section variants={item} className="mt-12">
+            <h2 className="text-[12px] font-semibold uppercase tracking-[0.18em] text-muted">
+              {t("favoriteMemories")}
+            </h2>
+            <ol className="ml-1 mt-6 space-y-9 border-l border-ink/10 pl-6">
+              {favoriteStories.map((story) => (
+                <StoryTimelineItem
+                  key={story.id}
+                  story={story}
+                  person={currentPerson}
+                />
+              ))}
+            </ol>
+          </motion.section>
+        )}
       </motion.div>
     </div>
   );
