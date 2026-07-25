@@ -69,7 +69,7 @@ def test_live_runtime_metadata_fails_closed_without_artifact_hashes() -> None:
             "model_id": "ai-sage/GigaAM-Multilingual",
             "model_variant": "large_ctc",
             "model_commit": "3905cd51c3ed4e88c8edf33f3302969ba480a327",
-            "chunker_version": "silero-smart-v2-exact-overlap",
+            "chunker_version": "silero-smart-v3-kk-ru-context",
             "vad_version": "6.2.1",
         }
     )
@@ -84,7 +84,7 @@ def test_live_runtime_metadata_accepts_complete_immutable_identity() -> None:
                 "model_id": "ai-sage/GigaAM-Multilingual",
                 "model_variant": "large_ctc",
                 "model_commit": "3905cd51c3ed4e88c8edf33f3302969ba480a327",
-                "chunker_version": "silero-smart-v2-exact-overlap",
+                "chunker_version": "silero-smart-v3-kk-ru-context",
                 "vad_version": "6.2.1",
                 "artifact_sha256:model.safetensors": "b" * 64,
             }
@@ -99,7 +99,7 @@ def test_live_runtime_metadata_rejects_model_drift() -> None:
             "model_id": "ai-sage/GigaAM-Multilingual",
             "model_variant": "large_ctc",
             "model_commit": "a" * 40,
-            "chunker_version": "silero-smart-v2-exact-overlap",
+            "chunker_version": "silero-smart-v3-kk-ru-context",
             "vad_version": "6.2.1",
             "artifact_sha256:model.safetensors": "b" * 64,
         }

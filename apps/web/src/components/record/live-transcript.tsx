@@ -11,6 +11,7 @@ interface LiveTranscriptProps {
   listening: boolean;
   supported: boolean | null;
   recognitionError: string | null;
+  serverRecognition?: boolean;
   className?: string;
 }
 
@@ -35,6 +36,7 @@ export function LiveTranscript({
   listening,
   supported,
   recognitionError,
+  serverRecognition = false,
   className,
 }: LiveTranscriptProps) {
   const { t } = useMuraI18n();
@@ -57,18 +59,24 @@ export function LiveTranscript({
       }}
     >
       <div className="pb-2 pt-16">
-        {sentences.length === 0 && supported !== false && !recognitionError && (
+        {sentences.length === 0 && serverRecognition && (
+          <p className={cn(sentenceClass, "text-muted/70")}>
+            {t("mixedSpeechRecognition")}
+            {listening && <Caret />}
+          </p>
+        )}
+        {sentences.length === 0 && !serverRecognition && supported !== false && !recognitionError && (
           <p className={cn(sentenceClass, "text-muted/70")}>
             {t("listening")}
             {listening && <Caret />}
           </p>
         )}
-        {sentences.length === 0 && supported === false && (
+        {sentences.length === 0 && !serverRecognition && supported === false && (
           <p className={cn(sentenceClass, "text-muted/70")}>
             {t("liveTextUnavailable")}
           </p>
         )}
-        {sentences.length === 0 && recognitionError && (
+        {sentences.length === 0 && !serverRecognition && recognitionError && (
           <p className={cn(sentenceClass, "text-muted/70")}>
             {t("speechRecognitionError")}
           </p>

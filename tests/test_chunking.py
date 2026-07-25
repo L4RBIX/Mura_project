@@ -25,6 +25,18 @@ def test_build_smart_ranges_merges_nearby_regions() -> None:
     assert chunks == [SpeechRegion(0, 160_000), SpeechRegion(400_000, 480_000)]
 
 
+def test_default_ranges_keep_natural_code_switch_pause_in_context() -> None:
+    chunks = build_smart_ranges(
+        [
+            SpeechRegion(0, 64_000),
+            SpeechRegion(88_000, 160_000),
+        ],
+        sample_rate=16_000,
+    )
+
+    assert chunks == [SpeechRegion(0, 160_000)]
+
+
 def test_padding_never_exceeds_limit() -> None:
     padded = apply_edge_padding(
         [SpeechRegion(0, 384_000)],

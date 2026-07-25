@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-CHUNKER_VERSION = "silero-smart-v2-exact-overlap"
+CHUNKER_VERSION = "silero-smart-v3-kk-ru-context"
 
 
 @dataclass(frozen=True)
@@ -46,8 +46,8 @@ def build_smart_ranges(
     regions: list[SpeechRegion],
     *,
     sample_rate: int,
-    max_chunk_seconds: float = 22.0,
-    max_internal_gap_seconds: float = 1.2,
+    max_chunk_seconds: float = 24.0,
+    max_internal_gap_seconds: float = 2.0,
 ) -> list[SpeechRegion]:
     if sample_rate <= 0:
         raise ValueError("sample_rate must be positive")

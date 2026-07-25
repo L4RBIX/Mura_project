@@ -25,6 +25,11 @@ from services.kaggle_asr.chunking import (
     merge_transcript_parts_with_diagnostics,
 )
 
+VAD_THRESHOLD = 0.42
+VAD_MIN_SPEECH_DURATION_MS = 160
+VAD_MIN_SILENCE_DURATION_MS = 400
+VAD_SPEECH_PAD_MS = 250
+
 
 class GigaAMTranscriber:
     model_id = GIGAAM_MODEL_ID
@@ -132,11 +137,11 @@ class GigaAMTranscriber:
             torch.from_numpy(waveform.copy()),
             self._vad_model,
             sampling_rate=sample_rate,
-            threshold=0.50,
-            min_speech_duration_ms=200,
-            min_silence_duration_ms=250,
+            threshold=VAD_THRESHOLD,
+            min_speech_duration_ms=VAD_MIN_SPEECH_DURATION_MS,
+            min_silence_duration_ms=VAD_MIN_SILENCE_DURATION_MS,
             max_speech_duration_s=20.0,
-            speech_pad_ms=150,
+            speech_pad_ms=VAD_SPEECH_PAD_MS,
             return_seconds=False,
         )
         if not regions_raw:
@@ -201,11 +206,14 @@ class GigaAMTranscriber:
             empty_chunk_count=empty_chunk_count,
             overlap_boundaries=merge_diagnostics.overlap_boundaries,
             duplicate_words_removed=merge_diagnostics.duplicate_words_removed,
+            language_mode="kk-ru-auto",
+            vad_threshold=VAD_THRESHOLD,
             ffmpeg_version=ffmpeg_version(),
         )
         return TranscriptEnvelope(
             recording_id=recording_id,
             duration_seconds=round(duration, 3),
+            language_hints=["kk", "ru"],
             full_text=full_text,
             segments=segments,
             asr_model=self.model_id,

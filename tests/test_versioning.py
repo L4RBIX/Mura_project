@@ -30,7 +30,7 @@ def test_pipeline_versions_are_explicit_and_copy_safe() -> None:
         == "gigaam-multilingual-large-ctc@3905cd51c3ed4e88c8edf33f3302969ba480a327"
     )
     assert versions.asr_vad == "silero-vad-6.2.1"
-    assert versions.asr_chunker == "silero-smart-v2-exact-overlap"
+    assert versions.asr_chunker == "silero-smart-v3-kk-ru-context"
     assert versions.asr_evaluator == "asr-evaluator-v1-wer-cer-boundary"
     assert versions.long_form_planner == "long-form-planner-v1"
     assert versions.long_form_window_policy == "long-form-window-policy-v1"

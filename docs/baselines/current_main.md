@@ -7,7 +7,7 @@ Manifest: `benchmarks/manifest.json`
 | Component | Version |
 |---|---|
 | archive_schema | `archive-claim-ledger-v1+conflict-decisions-v1+generic-claims-v1` |
-| asr_chunker | `silero-smart-v2-exact-overlap` |
+| asr_chunker | `silero-smart-v3-kk-ru-context` |
 | asr_evaluator | `asr-evaluator-v1-wer-cer-boundary` |
 | asr_model | `gigaam-multilingual-large-ctc@3905cd51c3ed4e88c8edf33f3302969ba480a327` |
 | asr_vad | `silero-vad-6.2.1` |

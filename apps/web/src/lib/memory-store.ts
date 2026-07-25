@@ -5,6 +5,7 @@ import {
   type MuraExtractionRequest,
   type MuraExtractionResult,
 } from "@/lib/mura-api-types";
+import { createAudioFileName } from "@/lib/audio-file";
 import { selectPrimaryStory } from "@/lib/mura-integration";
 import type { Story } from "@/lib/types";
 
@@ -26,6 +27,8 @@ export interface SavedMemory {
   transcript: string;
   people: SavedMemoryPerson[];
   durationSec: number;
+  audioMimeType: string;
+  audioFileName: string;
   source: SavedMemorySource;
   status: SavedMemoryStatus;
   extractionRequest?: MuraExtractionRequest;
@@ -81,9 +84,9 @@ export function getSavedMemories(): SavedMemory[] {
   try {
     const parsed: unknown = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
     if (!Array.isArray(parsed)) return [];
-    return parsed
+    return sortSavedMemoriesNewestFirst(parsed
       .map(normalizeSavedMemory)
-      .filter((memory): memory is SavedMemory => memory !== null);
+      .filter((memory): memory is SavedMemory => memory !== null));
   } catch {
     return [];
   }
@@ -95,7 +98,8 @@ export function getSavedMemory(id: string): SavedMemory | null {
 
 function writeMemory(memory: SavedMemory) {
   const memories = getSavedMemories().filter((item) => item.id !== memory.id);
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify([memory, ...memories].slice(0, 50)));
+  const ordered = sortSavedMemoriesNewestFirst([memory, ...memories]).slice(0, 50);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ordered));
 }
 
 export async function saveMemory(memory: SavedMemory, audio?: Blob) {
@@ -112,10 +116,16 @@ export function completeSavedMemory(
   extraction: MuraExtractionResult,
 ): SavedMemory {
   const primaryStory = selectPrimaryStory(extraction);
+  const title = primaryStory?.title.trim() || memory.title;
   return {
     ...memory,
     recordingId: extraction.recording_id,
-    title: primaryStory?.title.trim() || memory.title,
+    title,
+    audioFileName: createAudioFileName({
+      createdAt: memory.createdAt,
+      title,
+      mimeType: memory.audioMimeType,
+    }),
     summary: primaryStory?.summary.trim() || memory.transcript,
     people: extraction.people.map((person) => ({
       name: person.name,
@@ -171,6 +181,10 @@ export function normalizeSavedMemory(value: unknown): SavedMemory | null {
         relationship: person.relation_to_speaker ?? "",
       }));
 
+  const audioMimeType = stringValue(value.audioMimeType).trim() || "audio/webm";
+  const audioFileName = stringValue(value.audioFileName).trim() ||
+    createAudioFileName({ createdAt, title, mimeType: audioMimeType });
+
   return {
     id,
     recordingId: stringValue(value.recordingId) || extraction?.recording_id || id,
@@ -181,12 +195,24 @@ export function normalizeSavedMemory(value: unknown): SavedMemory | null {
     transcript,
     people,
     durationSec: finiteNumber(value.durationSec),
+    audioMimeType,
+    audioFileName,
     source,
     status,
     extractionRequest,
     extraction,
     extractionError: normalizeExtractionError(value.extractionError),
   };
+}
+
+export function sortSavedMemoriesNewestFirst(
+  memories: readonly SavedMemory[],
+): SavedMemory[] {
+  return [...memories].sort((left, right) => {
+    const byCreatedAt =
+      dateTimestamp(right.createdAt) - dateTimestamp(left.createdAt);
+    return byCreatedAt || left.id.localeCompare(right.id);
+  });
 }
 
 export function savedMemoryToStory(memory: SavedMemory): Story {
@@ -217,6 +243,11 @@ function stringValue(value: unknown): string {
 
 function finiteNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function dateTimestamp(value: string): number {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function savedMemoryStatus(value: unknown): SavedMemoryStatus | null {

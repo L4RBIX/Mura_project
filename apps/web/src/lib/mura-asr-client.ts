@@ -4,6 +4,7 @@ import {
   isMuraTranscriptEnvelope,
   type MuraTranscriptEnvelope,
 } from "@/lib/mura-api-types";
+import { audioExtensionForMimeType } from "@/lib/audio-file";
 
 interface AsrErrorPayload {
   error: {
@@ -19,27 +20,6 @@ export class MuraAsrClientError extends Error {
     super(message);
     this.name = "MuraAsrClientError";
     this.code = code;
-  }
-}
-
-function extensionForMimeType(mimeType: string): string {
-  const normalized = mimeType.toLowerCase().split(";", 1)[0]?.trim();
-  switch (normalized) {
-    case "audio/mp4":
-      return ".mp4";
-    case "audio/mpeg":
-      return ".mp3";
-    case "audio/ogg":
-      return ".ogg";
-    case "audio/wav":
-    case "audio/x-wav":
-      return ".wav";
-    case "audio/aac":
-      return ".aac";
-    case "audio/flac":
-      return ".flac";
-    default:
-      return ".webm";
   }
 }
 
@@ -72,7 +52,7 @@ export async function requestMuraTranscription(
   audio: Blob,
   recordingId: string,
 ): Promise<MuraTranscriptEnvelope> {
-  const extension = extensionForMimeType(audio.type);
+  const extension = audioExtensionForMimeType(audio.type);
   const file = new File(
     [audio],
     `${recordingId}${extension}`,

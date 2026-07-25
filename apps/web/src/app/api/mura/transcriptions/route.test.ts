@@ -37,8 +37,9 @@ describe("Mura ASR server proxy", () => {
       "Bearer server-only-asr-secret",
     );
     expect(forwardedHeaders.has("content-type")).toBe(false);
-    expect(forwardedForm?.get("recording_id")).toBe("rec_test");
-    expect(forwardedForm?.get("file")).toBeInstanceOf(File);
+    const capturedForm = forwardedForm as FormData | null;
+    expect(capturedForm?.get("recording_id")).toBe("rec_test");
+    expect(capturedForm?.get("file")).toBeInstanceOf(File);
     expect(await response.json()).toEqual(transcriptFixture());
   });
 

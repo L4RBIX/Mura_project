@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   completeSavedMemory,
   normalizeSavedMemory,
+  sortSavedMemoriesNewestFirst,
 } from "@/lib/memory-store";
 import {
   baseMemory,
@@ -18,6 +19,9 @@ describe("saved Mura memories", () => {
     expect(completed.status).toBe("completed");
     expect(completed.source).toBe("mura_model");
     expect(completed.title).toBe("Воспоминание об отце");
+    expect(completed.audioFileName).toBe(
+      "Воспоминание-об-отце_2026-07-25_08-00-00.webm",
+    );
     expect(completed.summary).toBe("Полная семейная история.");
     expect(completed.extraction).toEqual(extraction);
     expect(completed.extraction?.relationships).toEqual(
@@ -48,5 +52,24 @@ describe("saved Mura memories", () => {
       transcript: "Старый локальный текст",
     });
     expect(legacy?.extraction).toBeUndefined();
+    expect(legacy?.audioFileName).toBe(
+      "Старая-запись_2026-07-25_08-00-00.webm",
+    );
+  });
+
+  it("keeps recordings sorted by recording time after later updates", () => {
+    const older = {
+      ...baseMemory(),
+      id: "older",
+      createdAt: "2026-07-24T08:00:00.000Z",
+    };
+    const newer = {
+      ...baseMemory(),
+      id: "newer",
+      createdAt: "2026-07-25T08:00:00.000Z",
+    };
+
+    expect(sortSavedMemoriesNewestFirst([older, newer]).map(({ id }) => id))
+      .toEqual(["newer", "older"]);
   });
 });

@@ -104,6 +104,8 @@ export function baseMemory(): SavedMemory {
     transcript: "Менің әкем Сабыр алма бағында жұмыс істеген.",
     people: [],
     durationSec: 12,
+    audioMimeType: "audio/webm",
+    audioFileName: "25-шілде-күнгі-аудио_2026-07-25_08-00-00.webm",
     source: "mura_model",
     status: "extracting",
     extractionRequest: {

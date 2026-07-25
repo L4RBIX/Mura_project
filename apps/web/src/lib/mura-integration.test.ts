@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createExtractionRequestFromTranscript,
   finalPhrasesToSegments,
-  languageHintsForLocale,
+  mixedLanguageHints,
   selectPrimaryStory,
 } from "@/lib/mura-integration";
 import type { MuraTranscriptEnvelope } from "@/lib/mura-api-types";
@@ -52,9 +52,8 @@ describe("Mura transcript integration", () => {
     expect(segments[1].end).toBeGreaterThan(segments[1].start);
   });
 
-  it("orders locale hints without dropping the second supported language", () => {
-    expect(languageHintsForLocale("kk")).toEqual(["kk", "ru"]);
-    expect(languageHintsForLocale("ru")).toEqual(["ru", "kk"]);
+  it("uses mixed Kazakh/Russian hints independently of interface locale", () => {
+    expect(mixedLanguageHints()).toEqual(["kk", "ru"]);
   });
 
   it("uses GigaAM segments as the extraction source", () => {
@@ -90,7 +89,7 @@ describe("Mura transcript integration", () => {
       recording_id: "rec_gigaam",
       speaker_id: "speaker_test",
       speaker_name: "Бакыт",
-      language_hints: ["ky", "ru"],
+      language_hints: ["ky", "ru", "kk"],
       segments: [
         {
           segment_id: "seg_001",

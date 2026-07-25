@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScreenHeader } from "@/components/layout/screen-header";
@@ -243,6 +244,24 @@ export function LocalStoryView({ memoryId }: { memoryId: string }) {
             <audio className="w-full" controls preload="metadata" src={audioUrl}>
               <track kind="captions" />
             </audio>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  {t("audioFileLabel")}
+                </p>
+                <p className="truncate text-[12px] text-ink/75">
+                  {memory.audioFileName}
+                </p>
+              </div>
+              <a
+                href={audioUrl}
+                download={memory.audioFileName}
+                className="flex shrink-0 items-center gap-2 rounded-full bg-sand px-4 py-2 text-[12px] font-bold transition-transform active:scale-95"
+              >
+                <Download className="size-3.5" />
+                {t("downloadAudio")}
+              </a>
+            </div>
           </div>
         )}
 

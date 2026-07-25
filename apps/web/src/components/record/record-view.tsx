@@ -8,15 +8,14 @@ import { LiveTranscript } from "@/components/record/live-transcript";
 import { RecordButton } from "@/components/record/record-button";
 import { RecordControls } from "@/components/record/record-controls";
 import { Waveform } from "@/components/record/waveform";
-import { useLiveTranscript } from "@/hooks/use-live-transcript";
 import { useRecorder } from "@/hooks/use-recorder";
+import { createAudioFileName } from "@/lib/audio-file";
 import { formatTimer } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMuraI18n } from "@/lib/i18n";
 import { requestMuraTranscription } from "@/lib/mura-asr-client";
 import { isMuraExtractionConfigured } from "@/lib/mura-client";
 import {
-  createExtractionRequest,
   createExtractionRequestFromTranscript,
   getOrCreateLocalSpeakerId,
 } from "@/lib/mura-integration";
@@ -50,17 +49,8 @@ export function RecordView() {
   const { status, seconds, level, error: recorderError, start, pause, resume, restart, finish: finishAudio } = useRecorder();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<"upload" | null>(null);
-  const {
-    sentences,
-    discardAndReset,
-    finalizeFinalSentences,
-    reset,
-    supported,
-    error: recognitionError,
-  } = useLiveTranscript(locale, status === "recording");
 
   const startRecording = async () => {
-    reset();
     setUploadError(null);
     await start();
   };
@@ -69,12 +59,7 @@ export function RecordView() {
     if (seconds <= 0 || uploading) return;
     setUploading(true);
     setUploadError(null);
-    const finalSentencesPromise = finalizeFinalSentences();
-    const audioPromise = finishAudio();
-    const [finalSentences, audio] = await Promise.all([
-      finalSentencesPromise,
-      audioPromise,
-    ]);
+    const audio = await finishAudio();
     if (!audio) {
       setUploadError("upload");
       setUploading(false);
@@ -86,34 +71,29 @@ export function RecordView() {
       const createdAt = new Date().toISOString();
       const speakerName = narrator.name.trim() || t("genericNarrator");
       const speakerId = getOrCreateLocalSpeakerId();
-      const browserExtractionRequest = createExtractionRequest({
-        recordingId,
-        speakerId,
-        speakerName,
-        locale,
-        phrases: finalSentences,
-      });
-      const browserTranscript = (browserExtractionRequest?.segments ?? [])
-        .map((segment) => segment.text)
-        .join(" ")
-        .trim();
       const dateLabel = new Intl.DateTimeFormat(
         locale === "kk" ? "kk-KZ" : "ru-RU",
         { day: "numeric", month: "long" },
       ).format(new Date(createdAt));
+      const title = t("audioMemoryTitleWithDate", { date: dateLabel });
       const memory: SavedMemory = {
         id: memoryId,
         recordingId,
         createdAt,
         locale,
-        title: t("audioMemoryTitleWithDate", { date: dateLabel }),
-        summary: browserTranscript || t("transcriptUnavailable"),
-        transcript: browserTranscript,
+        title,
+        summary: t("transcriptUnavailable"),
+        transcript: "",
         people: [],
         durationSec: seconds,
-        source: browserExtractionRequest ? "mura_model" : "audio_only",
-        status: browserExtractionRequest ? "extracting" : "audio_only",
-        extractionRequest: browserExtractionRequest ?? undefined,
+        audioMimeType: audio.type || "audio/webm",
+        audioFileName: createAudioFileName({
+          createdAt,
+          title,
+          mimeType: audio.type || "audio/webm",
+        }),
+        source: "audio_only",
+        status: "audio_only",
       };
 
       // Persist the original recording before sending audio to any remote model.
@@ -142,8 +122,8 @@ export function RecordView() {
           updateSavedMemory(resolvedMemory);
         }
       } catch {
-        // Browser final phrases remain a graceful fallback if Kaggle is sleeping
-        // or temporarily unavailable. The original audio is already preserved.
+        // Never replace GigaAM with the browser's single-language recognizer.
+        // If Kaggle is sleeping, preserve the original audio without invented text.
       }
 
       if (
@@ -171,7 +151,6 @@ export function RecordView() {
   };
 
   const handleRestart = () => {
-    discardAndReset();
     void restart();
   };
 
@@ -227,10 +206,11 @@ export function RecordView() {
             transition={{ duration: 0.45, ease: EASE }}
           >
             <LiveTranscript
-              sentences={sentences}
+              sentences={[]}
               listening={status === "recording"}
-              supported={supported}
-              recognitionError={recognitionError}
+              supported={null}
+              recognitionError={null}
+              serverRecognition
               className="min-h-0 flex-1"
             />
             <div className="shrink-0 pb-[max(env(safe-area-inset-bottom),20px)] pt-4">

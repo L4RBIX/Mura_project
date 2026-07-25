@@ -12,7 +12,9 @@ model requires a code review of the new immutable snapshot and an explicit commi
 branches such as `large_ctc`, `main` or `latest` are not accepted at runtime.
 
 Silero VAD is pinned to package version `6.2.1`. The chunker is versioned independently as
-`silero-smart-v2-exact-overlap`. Chunk-boundary de-duplication uses exact normalized token overlap,
+`silero-smart-v3-kk-ru-context`. The worker keeps pauses up to two seconds inside one
+context window, uses less aggressive speech clipping for Kazakh, and declares the
+recording as potentially mixed `kk`/`ru`. Chunk-boundary de-duplication uses exact normalized token overlap,
 not fuzzy similarity, and limits removable tokens using the measured audio overlap duration.
 
 `mura-evaluate-asr` computes WER, CER, insertion/deletion/substitution counts, language buckets,

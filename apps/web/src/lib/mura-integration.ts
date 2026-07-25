@@ -41,8 +41,10 @@ export function finalPhrasesToSegments(
     }));
 }
 
-export function languageHintsForLocale(locale: Locale): ["kk", "ru"] | ["ru", "kk"] {
-  return locale === "kk" ? ["kk", "ru"] : ["ru", "kk"];
+export function mixedLanguageHints(): ["kk", "ru"] {
+  // Interface language controls labels only. Every recording is treated as
+  // potentially code-switched Kazakh/Russian speech.
+  return ["kk", "ru"];
 }
 
 export function getOrCreateLocalSpeakerId(): string {
@@ -71,7 +73,7 @@ export function createExtractionRequest(input: {
     recording_id: recordingId,
     speaker_id: speakerId,
     speaker_name: speakerName,
-    language_hints: languageHintsForLocale(input.locale),
+    language_hints: mixedLanguageHints(),
     segments,
   };
 }
@@ -100,9 +102,12 @@ export function createExtractionRequestFromTranscript(input: {
     recording_id: recordingId,
     speaker_id: speakerId,
     speaker_name: speakerName,
-    language_hints: input.transcript.language_hints.length
-      ? [...input.transcript.language_hints]
-      : languageHintsForLocale(input.locale),
+    language_hints: Array.from(
+      new Set([
+        ...input.transcript.language_hints,
+        ...mixedLanguageHints(),
+      ]),
+    ),
     segments,
   };
 }
