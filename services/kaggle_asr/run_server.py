@@ -8,6 +8,8 @@ import requests
 
 from services.kaggle_asr.tunnel import register_worker_url, start_quick_tunnel
 
+RECONNECT_DELAY_SECONDS = 2
+
 
 def main() -> None:
     uvicorn = subprocess.Popen(
@@ -35,10 +37,19 @@ def main() -> None:
         else:
             raise RuntimeError("ASR worker did not become healthy")
 
-        tunnel_process, public_url = start_quick_tunnel(8000)
-        print(f"Mura ASR worker: {public_url}", flush=True)
-        register_worker_url(public_url)
-        tunnel_process.wait()
+        while True:
+            tunnel_process, public_url = start_quick_tunnel(8000)
+            print(f"Mura ASR worker READY: {public_url}", flush=True)
+            register_worker_url(public_url)
+            tunnel_returncode = tunnel_process.wait()
+            if uvicorn.poll() is not None:
+                raise RuntimeError("Uvicorn stopped while the tunnel was running")
+            print(
+                "Cloudflare tunnel disconnected "
+                f"(exit {tunnel_returncode}); reconnecting...",
+                flush=True,
+            )
+            time.sleep(RECONNECT_DELAY_SECONDS)
     finally:
         uvicorn.terminate()
 
