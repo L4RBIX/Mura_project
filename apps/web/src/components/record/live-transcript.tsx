@@ -76,14 +76,14 @@ export function LiveTranscript({
         {sentences.map((sentence, i) =>
           sentence.complete ? (
             <p
-              key={i}
+              key={sentence.id}
               className={sentenceClass}
               style={{ opacity: Math.max(0.3, 0.85 - (lastComplete - i) * 0.18) }}
             >
               {sentence.text}
             </p>
           ) : (
-            <p key={i} className={sentenceClass}>
+            <p key={sentence.id} className={sentenceClass}>
               <Highlight tone="clay">{sentence.text}</Highlight>
               {listening && <Caret />}
             </p>

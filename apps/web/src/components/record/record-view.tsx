@@ -13,6 +13,10 @@ import { useRecorder } from "@/hooks/use-recorder";
 import { formatTimer } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMuraI18n } from "@/lib/i18n";
+import {
+  createExtractionRequest,
+  getOrCreateLocalSpeakerId,
+} from "@/lib/mura-integration";
 import { saveMemory, type SavedMemory } from "@/lib/memory-store";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
@@ -34,15 +38,19 @@ function TimerChip({ seconds, recording }: { seconds: number; recording: boolean
 }
 
 export function RecordView() {
-  const { locale, t } = useMuraI18n();
+  const { locale, narrator, t } = useMuraI18n();
   const router = useRouter();
   const { status, seconds, level, error: recorderError, start, pause, resume, restart, finish: finishAudio } = useRecorder();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<"upload" | null>(null);
-  const { sentences, reset, supported, error: recognitionError } = useLiveTranscript(
-    locale,
-    status === "recording",
-  );
+  const {
+    sentences,
+    discardAndReset,
+    finalizeFinalSentences,
+    reset,
+    supported,
+    error: recognitionError,
+  } = useLiveTranscript(locale, status === "recording");
 
   const startRecording = async () => {
     reset();
@@ -54,76 +62,59 @@ export function RecordView() {
     if (seconds <= 0 || uploading) return;
     setUploading(true);
     setUploadError(null);
-    const audio = await finishAudio();
+    const finalSentencesPromise = finalizeFinalSentences();
+    const audioPromise = finishAudio();
+    const [finalSentences, audio] = await Promise.all([
+      finalSentencesPromise,
+      audioPromise,
+    ]);
     if (!audio) {
       setUploadError("upload");
       setUploading(false);
       return;
     }
-    const extension = audio.type.includes("mp4") ? "m4a" : "webm";
-    const transcript = sentences.map((sentence) => sentence.text).join(" ").trim();
-    const memoryId = `local-${crypto.randomUUID()}`;
-    const baseMemory: SavedMemory = {
-      id: memoryId,
-      createdAt: new Date().toISOString(),
-      locale,
-      title: t("audioMemoryTitle"),
-      summary: transcript || t("transcriptUnavailable"),
-      transcript,
-      people: [],
-      durationSec: seconds,
-      source: "audio_only",
-    };
-    const form = new FormData();
-    form.append("file", audio, `mura-recording.${extension}`);
-    form.append("family_id", "family_mura_app");
-    form.append("speaker_id", "aisulu");
-    form.append("speaker_name", "Айсұлу");
     try {
-      const response = await fetch("/api/mura/v1/recordings", { method: "POST", body: form });
-      if (response.ok) {
-        const accepted = (await response.json()) as { recording_id: string; job_id: string };
-        await saveMemory({ ...baseMemory, source: "mura_core" }, audio);
-        router.push(
-          `/processing?job=${encodeURIComponent(accepted.job_id)}&recording=${encodeURIComponent(accepted.recording_id)}&memory=${encodeURIComponent(memoryId)}`,
-        );
-        return;
-      }
-      if (![502, 503].includes(response.status)) throw new Error("upload_failed");
-      if (!transcript) {
-        await saveMemory(baseMemory, audio);
-        router.push(`/processing?memory=${encodeURIComponent(memoryId)}`);
-        return;
-      }
-      const fallback = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ transcript, locale }),
+      const memoryId = `local-${crypto.randomUUID()}`;
+      const recordingId = `rec_${crypto.randomUUID()}`;
+      const createdAt = new Date().toISOString();
+      const speakerName = narrator.name.trim() || t("genericNarrator");
+      const extractionRequest = createExtractionRequest({
+        recordingId,
+        speakerId: getOrCreateLocalSpeakerId(),
+        speakerName,
+        locale,
+        phrases: finalSentences,
       });
-      if (!fallback.ok) {
-        await saveMemory(baseMemory, audio);
-        router.push(`/processing?memory=${encodeURIComponent(memoryId)}`);
-        return;
-      }
-      const analysis = (await fallback.json()) as {
-        title?: string;
-        summary?: string;
-        people?: Array<{ name?: string; relationship?: string }>;
-      };
+      const transcript = (extractionRequest?.segments ?? [])
+        .map((segment) => segment.text)
+        .join(" ")
+        .trim();
+      const dateLabel = new Intl.DateTimeFormat(
+        locale === "kk" ? "kk-KZ" : "ru-RU",
+        { day: "numeric", month: "long" },
+      ).format(new Date(createdAt));
       const memory: SavedMemory = {
-        ...baseMemory,
-        title: analysis.title?.trim() || baseMemory.title,
-        summary: analysis.summary?.trim() || baseMemory.summary,
-        people: (analysis.people ?? [])
-          .filter((person) => person.name?.trim())
-          .map((person) => ({
-            name: person.name!.trim(),
-            relationship: person.relationship?.trim() ?? "",
-          })),
-        source: "deepseek_fallback",
+        id: memoryId,
+        recordingId,
+        createdAt,
+        locale,
+        title: t("audioMemoryTitleWithDate", { date: dateLabel }),
+        summary: transcript || t("transcriptUnavailable"),
+        transcript,
+        people: [],
+        durationSec: seconds,
+        source: extractionRequest ? "mura_model" : "audio_only",
+        status: extractionRequest ? "extracting" : "audio_only",
+        extractionRequest: extractionRequest ?? undefined,
       };
+
+      // Persist the original recording before any model request is started.
       await saveMemory(memory, audio);
-      router.push(`/processing?memory=${encodeURIComponent(memoryId)}`);
+      router.push(
+        extractionRequest
+          ? `/processing?memory=${encodeURIComponent(memoryId)}`
+          : `/story/${encodeURIComponent(memoryId)}`,
+      );
     } catch {
       setUploadError("upload");
       setUploading(false);
@@ -131,8 +122,8 @@ export function RecordView() {
   };
 
   const handleRestart = () => {
-    reset();
-    restart();
+    discardAndReset();
+    void restart();
   };
 
   return (

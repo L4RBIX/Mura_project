@@ -112,7 +112,12 @@ export function useRecorder() {
 
   const restart = useCallback(async () => {
     const recorder = recorderRef.current;
-    if (recorder && recorder.state !== "inactive") recorder.stop();
+    setStatus("idle");
+    if (recorder && recorder.state !== "inactive") {
+      recorder.ondataavailable = null;
+      recorder.onstop = null;
+      recorder.stop();
+    }
     stopTracks();
     recorderRef.current = null;
     chunksRef.current = [];

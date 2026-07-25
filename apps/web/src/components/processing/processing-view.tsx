@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { analyzeSavedMemory } from "@/lib/mura-client";
 import { getSavedMemory, type SavedMemory } from "@/lib/memory-store";
 import { useMuraI18n } from "@/lib/i18n";
 
@@ -32,72 +33,67 @@ function NameChip({ name, delay }: { name: string; delay: number }) {
 
 export function ProcessingView() {
   const { locale, t } = useMuraI18n();
-  const steps = [t("processingListen"), t("processingPeople"), t("processingPlace")];
+  const steps = [
+    t("processingPrepare"),
+    t("processingAnalyze"),
+    t("processingOrganize"),
+  ];
   const router = useRouter();
   const searchParams = useSearchParams();
-  const jobId = searchParams.get("job");
-  const recordingId = searchParams.get("recording");
   const memoryId = searchParams.get("memory");
   const [memory, setMemory] = useState<SavedMemory | null>(null);
   const [step, setStep] = useState(0);
   const [failed, setFailed] = useState(false);
+  const startedRef = useRef(false);
+  const redirectTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (memoryId) setMemory(getSavedMemory(memoryId));
-  }, [memoryId]);
+    if (!memoryId || startedRef.current) return;
+    startedRef.current = true;
+    const current = getSavedMemory(memoryId);
+    setMemory(current);
+    if (!current) {
+      setFailed(true);
+      return;
+    }
+    if (current.status !== "extracting") {
+      router.replace(`/story/${encodeURIComponent(memoryId)}`);
+      return;
+    }
 
-  useEffect(() => {
-    if (jobId || !memoryId) return;
-    const timers = [
-      window.setTimeout(() => setStep(1), 600),
-      window.setTimeout(() => setStep(2), 1300),
-      window.setTimeout(
-        () => router.replace(`/story/${encodeURIComponent(memoryId)}`),
-        2100,
-      ),
+    let active = true;
+    const stepTimers = [
+      window.setTimeout(() => active && setStep(1), 900),
+      window.setTimeout(() => active && setStep(2), 2600),
     ];
-    return () => timers.forEach(window.clearTimeout);
-  }, [jobId, memoryId, router]);
+    void analyzeSavedMemory(memoryId)
+      .then((completed) => {
+        if (!active) return;
+        setMemory(completed);
+        setStep(2);
+        redirectTimerRef.current = window.setTimeout(
+          () => router.replace(`/story/${encodeURIComponent(memoryId)}`),
+          450,
+        );
+      })
+      .catch(() => {
+        if (!active) return;
+        setFailed(true);
+        redirectTimerRef.current = window.setTimeout(
+          () => router.replace(`/story/${encodeURIComponent(memoryId)}`),
+          650,
+        );
+      });
 
-  useEffect(() => {
-    if (!jobId || !recordingId || !memoryId) return;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const response = await fetch(`/api/mura/v1/jobs/${encodeURIComponent(jobId)}`, {
-          cache: "no-store",
-        });
-        if (!response.ok) throw new Error("job_poll_failed");
-        const job = (await response.json()) as { status: string; stage: string };
-        if (cancelled) return;
-        if (job.status === "failed") {
-          setFailed(true);
-          return;
-        }
-        if (["cleaning", "extracting"].includes(job.status) || job.stage.startsWith("window_"))
-          setStep(1);
-        if (["resolving", "completed"].includes(job.status)) setStep(2);
-        if (job.status === "completed") {
-          const result = await fetch(
-            `/api/mura/v1/recordings/${encodeURIComponent(recordingId)}`,
-            { cache: "no-store" },
-          );
-          if (result.ok) {
-            sessionStorage.setItem("mura-latest-result", await result.text());
-            router.replace(`/story/${encodeURIComponent(memoryId)}`);
-          }
-        }
-      } catch {
-        if (!cancelled) setFailed(true);
+    return () => {
+      active = false;
+      startedRef.current = false;
+      stepTimers.forEach(window.clearTimeout);
+      if (redirectTimerRef.current !== null) {
+        window.clearTimeout(redirectTimerRef.current);
       }
     };
-    void poll();
-    const timer = window.setInterval(poll, 1500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [jobId, memoryId, recordingId, router]);
+  }, [memoryId, router]);
 
   const dateLabel = useMemo(() => {
     if (!memory) return "";

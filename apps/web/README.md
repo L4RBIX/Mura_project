@@ -1,85 +1,173 @@
-# Mura · Мұра
+# Mura · Мұра web
 
-> Отбасылық дауыстарды сақтаймыз. Сохраняем голоса семьи.
+Mobile-first интерфейс семейного архива на русском и казахском. Браузер записывает
+оригинальное аудио локально, получает только завершённые фразы через
+`SpeechRecognition` и отправляет их в отдельный Mura model service через
+server-side proxy Next.js.
 
-Mobile-first веб-приложение для семейных воспоминаний: пользователь записывает историю, Mura отправляет аудио в Core API, показывает реальный прогресс обработки и сохраняет готовый ML-результат для интерфейса семейного архива.
-
-Интерфейс полностью работает на русском и казахском; язык можно переключить в приложении.
-
-## Что уже работает
-
-- Настоящая запись микрофона через `MediaRecorder`.
-- Загрузка аудио в Mura Core и polling статуса задания.
-- Серверный Next.js proxy: адрес backend и bearer-токен не попадают в браузер.
-- Русский и казахский UI для onboarding, записи, обработки, дерева, персон и историй.
-- Интерактивное семейное дерево с pan, zoom, сменой центрального человека и раскрытием ветвей.
-- Адаптивный mobile-first интерфейс и анимации с поддержкой `prefers-reduced-motion`.
-
-## Как это связано
+## Архитектура интеграции
 
 ```text
-Browser
-  │  audio + form data
-  ▼
-Next.js /api/mura/*
-  │  server-only Authorization header
-  ▼
-Mura FastAPI Core
-  ├── Kaggle GPU ASR
-  ├── DeepSeek cleanup + extraction
-  └── PostgreSQL jobs and archive
+MediaRecorder + SpeechRecognition в браузере
+  ├── audio Blob → IndexedDB этого устройства
+  └── final transcript phrases
+          ↓
+POST /api/mura/extractions (Next.js)
+  └── server-only Authorization
+          ↓
+POST /v1/extractions (Mura model FastAPI)
+          ↓
+существующий ExtractionPipeline → ExtractionResult
+          ↓
+localStorage metadata + detail UI
 ```
 
-## Быстрый запуск
+Приложение не загружает audio Blob в Mura backend: model-only сервис принимает
+сегменты текста, а оригинальная запись остаётся в IndexedDB. Реализация Web Speech
+может использовать сервис производителя браузера, поэтому её privacy-поведение
+зависит от выбранного браузера. Interim-фразы `SpeechRecognition` никогда не
+отправляются в Mura.
+
+## Локальный запуск
+
+Сначала запустите отдельный backend модели:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[api,dev]"
+cp .env.example .env
+python -m uvicorn mura_model.api:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+Затем frontend:
+
+```bash
+cd apps/web
 npm install
 cp .env.example .env.local
 npm run dev
 ```
 
-Заполните `.env.local`:
+Откройте `http://localhost:3000`.
+
+`apps/web/.env.local`:
 
 ```dotenv
-MURA_API_URL=http://127.0.0.1:8001
-MURA_CORE_API_KEY=your-core-api-bearer-token
+MURA_MODEL_API_URL=http://127.0.0.1:8000
+MURA_MODEL_API_KEY=replace_with_same_backend_secret
+MURA_MODEL_TIMEOUT_MS=300000
 ```
 
-Откройте `http://localhost:3000`. Backend должен быть запущен отдельно на адресе из `MURA_API_URL`.
+`MURA_MODEL_API_KEY` должен совпадать с отдельным `MURA_API_KEY` backend. Все
+переменные остаются server-only: не добавляйте префикс `NEXT_PUBLIC_` и не
+коммитьте `.env.local`. Frontend не содержит DeepSeek credentials.
 
-> Эти переменные должны оставаться server-only. Не добавляйте к ним префикс `NEXT_PUBLIC_` и не коммитьте `.env.local`.
+## Контракт proxy
 
-## Пользовательский путь
+Браузер вызывает только:
 
-```text
-/ → /home → /record → /processing → /tree
-                                      ├── /person/[id]
-                                      └── /story/[id]
+```http
+POST /api/mura/extractions
+Content-Type: application/json
 ```
 
-На странице записи приложение запрашивает микрофон, собирает аудио и отправляет его в `/api/mura/v1/recordings`. Страница обработки получает состояние `/v1/jobs/{job_id}`, загружает готовый результат и сохраняет его в `sessionStorage`. Текущая визуализация дерева использует демонстрационный семейный набор; привязка сохранённого результата к карточкам дерева остаётся отдельным UI-шагом.
+Пример тела:
+
+```json
+{
+  "recording_id": "rec_123",
+  "speaker_id": "speaker_123",
+  "speaker_name": "Айсұлу",
+  "language_hints": ["kk", "ru"],
+  "segments": [
+    {
+      "segment_id": "seg_001",
+      "start": 0,
+      "end": 4.2,
+      "text": "Менің әкем Сабыр алма бағында жұмыс істеген."
+    }
+  ]
+}
+```
+
+Proxy проверяет запрос, добавляет `Authorization: Bearer <MURA_MODEL_API_KEY>`
+только на сервере и пересылает его в `${MURA_MODEL_API_URL}/v1/extractions`.
+Успешный `ExtractionResult` содержит `languages`, `people`, `relationships`,
+`events`, `stories` и `review_items` и сохраняется полностью.
+
+Минимальный успешный ответ:
+
+```json
+{
+  "schema_version": "simple-v1",
+  "recording_id": "rec_123",
+  "languages": ["kk", "ru"],
+  "people": [],
+  "relationships": [],
+  "events": [],
+  "stories": [],
+  "review_items": []
+}
+```
+
+Безопасные proxy-ошибки:
+
+- `503 backend_not_configured`;
+- `502 backend_unreachable`;
+- `504 backend_timeout`;
+- `401 unauthorized`;
+- безопасные `provider_error`, `repair_failed`, `invalid_model_response` и
+  `internal_error` без URL backend, токенов или stack trace.
+
+## Запись, хранение и повторный анализ
+
+1. После завершения записи audio Blob сразу сохраняется в IndexedDB.
+2. Каждая final-фраза становится отдельным `seg_001`, `seg_002`, … .
+3. Время фразы приблизительное: browser API не предоставляет ASR alignment, поэтому
+   hook использует активное время записи и сохраняет порядок без пересечений.
+4. Запрос и базовая память сохраняются до сетевого вызова.
+5. Страница `/processing?memory=...` выполняет один синхронный model request.
+6. При ошибке остаются аудио, transcript и исходный request. Кнопка «Повторить
+   анализ» использует сохранённые сегменты без новой записи и без автоматического
+   retry loop.
+7. Старые записи localStorage нормализуются при чтении и продолжают открываться.
+
+Если ни одной final-фразы нет, backend не вызывается: создаётся `audio_only`
+память с понятным сообщением. Фейковая расшифровка не подставляется.
+
+## Detail UI
+
+Локальная страница воспоминания показывает:
+
+- основной и дополнительные stories;
+- всех людей, aliases, отношение к рассказчику и review status;
+- связи с разрешёнными именами и ролями;
+- события, даты, места и участников;
+- review items;
+- transcript по сегментам.
+
+Evidence ID работает как ссылка: нажатие прокручивает страницу к нужной фразе и
+временно подсвечивает её. Семейное дерево остаётся отдельной существующей
+визуализацией и не изменяется этой интеграцией.
 
 ## Команды качества
 
 ```bash
+npm test
 npm run lint
 npm run build
 ```
 
-## Стек
+Focused Vitest suite проверяет final-only segment mapping, locale hints, выбор
+основной story, полное сохранение результата, старый формат localStorage, retry
+из сохранённого transcript, server-only Authorization, timeout и безопасную
+нормализацию proxy-ошибок.
 
-Next.js 15 · React 19 · TypeScript · Tailwind CSS v4 · Framer Motion · Lucide
+## Известные ограничения
 
-## Структура
-
-```text
-src/app/          маршруты и серверный API proxy
-src/components/   экраны и UI-компоненты
-src/data/         демонстрационные люди и истории
-src/hooks/        запись аудио, transcript и pan/zoom
-src/lib/          i18n, типы и форматирование
-```
-
-## Деплой
-
-Frontend рассчитан на Vercel. В настройках проекта добавьте `MURA_API_URL` с публичным HTTPS-адресом Core API и `MURA_CORE_API_KEY` с тем же секретом, который ожидает backend. Сам Core API требует постоянный Python-хостинг и PostgreSQL; localhost из Vercel недоступен.
+- Поддержка `SpeechRecognition` и доступные языки зависят от браузера.
+- Transcript timestamps приблизительные и не являются выравниванием по аудио.
+- Аудио и archive metadata существуют только в текущем браузере/устройстве.
+- Серверной базы данных, cloud audio storage и автоматической синхронизации пока
+  нет.
