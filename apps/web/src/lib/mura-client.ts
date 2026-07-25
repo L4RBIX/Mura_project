@@ -27,6 +27,25 @@ export class MuraClientError extends Error {
   }
 }
 
+export async function isMuraExtractionConfigured(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/mura/extractions", {
+      method: "GET",
+      cache: "no-store",
+    });
+    const payload: unknown = await response.json();
+    return (
+      response.ok &&
+      typeof payload === "object" &&
+      payload !== null &&
+      "configured" in payload &&
+      payload.configured === true
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function requestMuraExtraction(
   request: MuraExtractionRequest,
 ): Promise<MuraExtractionResult> {

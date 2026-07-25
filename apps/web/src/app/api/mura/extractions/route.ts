@@ -163,6 +163,13 @@ function normalizeBackendError(
   return { body: errorBody("backend_error"), status: 502 };
 }
 
+export function GET() {
+  return NextResponse.json(
+    { configured: configuration() !== null },
+    { headers: { "cache-control": "no-store" } },
+  );
+}
+
 export async function POST(request: NextRequest) {
   const config = configuration();
   if (!config) {

@@ -14,6 +14,7 @@ import { formatTimer } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMuraI18n } from "@/lib/i18n";
 import { requestMuraTranscription } from "@/lib/mura-asr-client";
+import { isMuraExtractionConfigured } from "@/lib/mura-client";
 import {
   createExtractionRequest,
   createExtractionRequestFromTranscript,
@@ -143,6 +144,19 @@ export function RecordView() {
       } catch {
         // Browser final phrases remain a graceful fallback if Kaggle is sleeping
         // or temporarily unavailable. The original audio is already preserved.
+      }
+
+      if (
+        resolvedMemory.extractionRequest &&
+        !(await isMuraExtractionConfigured())
+      ) {
+        resolvedMemory = {
+          ...resolvedMemory,
+          source: "audio_only",
+          status: "audio_only",
+          extractionRequest: undefined,
+        };
+        updateSavedMemory(resolvedMemory);
       }
 
       router.push(

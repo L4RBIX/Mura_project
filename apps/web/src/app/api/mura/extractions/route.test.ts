@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { POST } from "@/app/api/mura/extractions/route";
+import { GET, POST } from "@/app/api/mura/extractions/route";
 import { extractionResultFixture } from "@/test/mura-fixtures";
 
 beforeEach(() => {
@@ -15,6 +15,15 @@ afterEach(() => {
 });
 
 describe("Mura server proxy", () => {
+  it("reports whether extraction is configured without exposing secrets", async () => {
+    const configured = await GET();
+    expect(await configured.json()).toEqual({ configured: true });
+
+    vi.stubEnv("MURA_MODEL_API_KEY", "");
+    const unconfigured = await GET();
+    expect(await unconfigured.json()).toEqual({ configured: false });
+  });
+
   it("adds backend Authorization server-side and forwards a valid result", async () => {
     let forwardedUrl = "";
     let forwardedHeaders = new Headers();
