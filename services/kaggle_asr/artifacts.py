@@ -10,7 +10,7 @@ from typing import Any
 GIGAAM_MODEL_ID = "ai-sage/GigaAM-Multilingual"
 GIGAAM_MODEL_VARIANT = "large_ctc"
 # Immutable Hugging Face commit backing the large_ctc variant used by Mura.
-GIGAAM_MODEL_COMMIT = "ac7c6db08133f83478451a659f8470ee8ab47a2d"
+GIGAAM_MODEL_COMMIT = "3905cd51c3ed4e88c8edf33f3302969ba480a327"
 SILERO_VAD_PACKAGE = "silero-vad"
 SILERO_VAD_VERSION = "6.2.1"
 REMOTE_CODE_POLICY = "immutable_hf_commit_local_snapshot_v1"

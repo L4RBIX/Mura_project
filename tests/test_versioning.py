@@ -27,7 +27,7 @@ def test_pipeline_versions_are_explicit_and_copy_safe() -> None:
     assert versions.benchmark_schema == "benchmark-v7-offline-e2e+asr-contract+identity-safety"
     assert (
         versions.asr_model
-        == "gigaam-multilingual-large-ctc@ac7c6db08133f83478451a659f8470ee8ab47a2d"
+        == "gigaam-multilingual-large-ctc@3905cd51c3ed4e88c8edf33f3302969ba480a327"
     )
     assert versions.asr_vad == "silero-vad-6.2.1"
     assert versions.asr_chunker == "silero-smart-v2-exact-overlap"

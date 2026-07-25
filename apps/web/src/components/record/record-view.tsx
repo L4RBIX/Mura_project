@@ -13,11 +13,17 @@ import { useRecorder } from "@/hooks/use-recorder";
 import { formatTimer } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMuraI18n } from "@/lib/i18n";
+import { requestMuraTranscription } from "@/lib/mura-asr-client";
 import {
   createExtractionRequest,
+  createExtractionRequestFromTranscript,
   getOrCreateLocalSpeakerId,
 } from "@/lib/mura-integration";
-import { saveMemory, type SavedMemory } from "@/lib/memory-store";
+import {
+  saveMemory,
+  updateSavedMemory,
+  type SavedMemory,
+} from "@/lib/memory-store";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
@@ -78,14 +84,15 @@ export function RecordView() {
       const recordingId = `rec_${crypto.randomUUID()}`;
       const createdAt = new Date().toISOString();
       const speakerName = narrator.name.trim() || t("genericNarrator");
-      const extractionRequest = createExtractionRequest({
+      const speakerId = getOrCreateLocalSpeakerId();
+      const browserExtractionRequest = createExtractionRequest({
         recordingId,
-        speakerId: getOrCreateLocalSpeakerId(),
+        speakerId,
         speakerName,
         locale,
         phrases: finalSentences,
       });
-      const transcript = (extractionRequest?.segments ?? [])
+      const browserTranscript = (browserExtractionRequest?.segments ?? [])
         .map((segment) => segment.text)
         .join(" ")
         .trim();
@@ -99,19 +106,47 @@ export function RecordView() {
         createdAt,
         locale,
         title: t("audioMemoryTitleWithDate", { date: dateLabel }),
-        summary: transcript || t("transcriptUnavailable"),
-        transcript,
+        summary: browserTranscript || t("transcriptUnavailable"),
+        transcript: browserTranscript,
         people: [],
         durationSec: seconds,
-        source: extractionRequest ? "mura_model" : "audio_only",
-        status: extractionRequest ? "extracting" : "audio_only",
-        extractionRequest: extractionRequest ?? undefined,
+        source: browserExtractionRequest ? "mura_model" : "audio_only",
+        status: browserExtractionRequest ? "extracting" : "audio_only",
+        extractionRequest: browserExtractionRequest ?? undefined,
       };
 
-      // Persist the original recording before any model request is started.
+      // Persist the original recording before sending audio to any remote model.
       await saveMemory(memory, audio);
+
+      let resolvedMemory = memory;
+      try {
+        const asrTranscript = await requestMuraTranscription(audio, recordingId);
+        const asrExtractionRequest = createExtractionRequestFromTranscript({
+          transcript: asrTranscript,
+          speakerId,
+          speakerName,
+          locale,
+        });
+        if (asrExtractionRequest) {
+          const transcript = asrTranscript.full_text.trim();
+          resolvedMemory = {
+            ...memory,
+            summary: transcript,
+            transcript,
+            durationSec: asrTranscript.duration_seconds,
+            source: "mura_model",
+            status: "extracting",
+            extractionRequest: asrExtractionRequest,
+          };
+          updateSavedMemory(resolvedMemory);
+        }
+      } catch {
+        // Browser final phrases remain a graceful fallback if Kaggle is sleeping
+        // or temporarily unavailable. The original audio is already preserved.
+      }
+
       router.push(
-        extractionRequest
+        resolvedMemory.extractionRequest
           ? `/processing?memory=${encodeURIComponent(memoryId)}`
           : `/story/${encodeURIComponent(memoryId)}`,
       );

@@ -5,6 +5,23 @@ export interface TranscriptSegment {
   text: string;
 }
 
+export interface MuraAsrSegment extends TranscriptSegment {
+  chunk_id?: string | null;
+}
+
+export interface MuraTranscriptEnvelope {
+  recording_id: string;
+  duration_seconds: number;
+  language_hints: string[];
+  full_text: string;
+  segments: MuraAsrSegment[];
+  asr_model: string;
+  asr_revision: string;
+  chunker_version: string;
+  processing_seconds: number | null;
+  asr_metadata: Record<string, string | number | boolean>;
+}
+
 export interface MuraExtractionRequest {
   recording_id: string;
   speaker_id: string;
@@ -252,6 +269,45 @@ function isTranscriptSegment(value: unknown): value is TranscriptSegment {
   );
 }
 
+function isMuraAsrSegment(value: unknown): value is MuraAsrSegment {
+  if (
+    !isObject(value) ||
+    !hasExactKeys(
+      value,
+      ["segment_id", "start", "end", "text"],
+      ["chunk_id"],
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    isNonEmptyText(value.segment_id) &&
+    isFiniteNumber(value.start) &&
+    value.start >= 0 &&
+    isFiniteNumber(value.end) &&
+    value.end > value.start &&
+    isNonEmptyText(value.text) &&
+    (value.chunk_id === undefined ||
+      value.chunk_id === null ||
+      isNonEmptyText(value.chunk_id))
+  );
+}
+
+function isAsrMetadata(
+  value: unknown,
+): value is Record<string, string | number | boolean> {
+  return (
+    isObject(value) &&
+    Object.values(value).every(
+      (item) =>
+        typeof item === "string" ||
+        typeof item === "boolean" ||
+        isFiniteNumber(item),
+    )
+  );
+}
+
 function isMuraPerson(value: unknown): value is MuraPerson {
   if (
     !isObject(value) ||
@@ -456,6 +512,62 @@ export function isMuraExtractionRequest(
 
   return hasUniqueStrings(
     value.segments.map((segment) => segment.segment_id),
+  );
+}
+
+export function isMuraTranscriptEnvelope(
+  value: unknown,
+): value is MuraTranscriptEnvelope {
+  if (
+    !isObject(value) ||
+    !hasExactKeys(value, [
+      "recording_id",
+      "duration_seconds",
+      "language_hints",
+      "full_text",
+      "segments",
+      "asr_model",
+      "asr_revision",
+      "chunker_version",
+      "processing_seconds",
+      "asr_metadata",
+    ])
+  ) {
+    return false;
+  }
+
+  if (
+    !isNonEmptyText(value.recording_id) ||
+    !isFiniteNumber(value.duration_seconds) ||
+    value.duration_seconds <= 0 ||
+    !isDeduplicatedStringArray(value.language_hints) ||
+    !isNonEmptyText(value.full_text) ||
+    !Array.isArray(value.segments) ||
+    value.segments.length < 1 ||
+    !value.segments.every(isMuraAsrSegment) ||
+    !isNonEmptyText(value.asr_model) ||
+    !isNonEmptyText(value.asr_revision) ||
+    !isNonEmptyText(value.chunker_version) ||
+    !(
+      value.processing_seconds === null ||
+      (isFiniteNumber(value.processing_seconds) &&
+        value.processing_seconds >= 0)
+    ) ||
+    !isAsrMetadata(value.asr_metadata)
+  ) {
+    return false;
+  }
+
+  const transcript = value as unknown as MuraTranscriptEnvelope;
+  return (
+    hasUniqueStrings(
+      transcript.segments.map((segment) => segment.segment_id),
+    ) &&
+    transcript.segments.every(
+      (segment, index) =>
+        index === 0 ||
+        segment.start >= transcript.segments[index - 1]!.start,
+    )
   );
 }
 

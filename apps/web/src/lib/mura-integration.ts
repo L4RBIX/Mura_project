@@ -3,6 +3,7 @@ import type {
   MuraExtractionRequest,
   MuraExtractionResult,
   MuraStory,
+  MuraTranscriptEnvelope,
   TranscriptSegment,
 } from "@/lib/mura-api-types";
 
@@ -71,6 +72,37 @@ export function createExtractionRequest(input: {
     speaker_id: speakerId,
     speaker_name: speakerName,
     language_hints: languageHintsForLocale(input.locale),
+    segments,
+  };
+}
+
+export function createExtractionRequestFromTranscript(input: {
+  transcript: MuraTranscriptEnvelope;
+  speakerId: string;
+  speakerName: string;
+  locale: Locale;
+}): MuraExtractionRequest | null {
+  const recordingId = input.transcript.recording_id.trim();
+  const speakerId = input.speakerId.trim();
+  const speakerName = input.speakerName.trim();
+  const segments = input.transcript.segments.map((segment) => ({
+    segment_id: segment.segment_id,
+    start: segment.start,
+    end: segment.end,
+    text: segment.text.trim(),
+  }));
+
+  if (!recordingId || !speakerId || !speakerName || !segments.length) {
+    return null;
+  }
+
+  return {
+    recording_id: recordingId,
+    speaker_id: speakerId,
+    speaker_name: speakerName,
+    language_hints: input.transcript.language_hints.length
+      ? [...input.transcript.language_hints]
+      : languageHintsForLocale(input.locale),
     segments,
   };
 }

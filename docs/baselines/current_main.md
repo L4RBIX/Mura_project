@@ -9,7 +9,7 @@ Manifest: `benchmarks/manifest.json`
 | archive_schema | `archive-claim-ledger-v1+conflict-decisions-v1+generic-claims-v1` |
 | asr_chunker | `silero-smart-v2-exact-overlap` |
 | asr_evaluator | `asr-evaluator-v1-wer-cer-boundary` |
-| asr_model | `gigaam-multilingual-large-ctc@ac7c6db08133f83478451a659f8470ee8ab47a2d` |
+| asr_model | `gigaam-multilingual-large-ctc@3905cd51c3ed4e88c8edf33f3302969ba480a327` |
 | asr_vad | `silero-vad-6.2.1` |
 | benchmark_schema | `benchmark-v7-offline-e2e+asr-contract+identity-safety` |
 | claim_semantics | `claim-semantics-v1` |

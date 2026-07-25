@@ -1,7 +1,7 @@
 # ASR reproducibility and evaluation
 
 Mura loads `ai-sage/GigaAM-Multilingual` from the immutable Hugging Face commit
-`ac7c6db08133f83478451a659f8470ee8ab47a2d`, corresponding to the `large_ctc`
+`3905cd51c3ed4e88c8edf33f3302969ba480a327`, corresponding to the `large_ctc`
 variant selected for the worker. The upstream model requires custom Transformers code. Mura
 therefore downloads the complete snapshot at that exact commit, computes SHA-256 digests for the
 configuration, custom code and weight artifact, and then loads only from the local snapshot with

@@ -1,17 +1,23 @@
 # Mura · Мұра web
 
-Mobile-first интерфейс семейного архива на русском и казахском. Браузер записывает
-оригинальное аудио локально, получает только завершённые фразы через
-`SpeechRecognition` и отправляет их в отдельный Mura model service через
-server-side proxy Next.js.
+Mobile-first интерфейс семейного архива на русском и казахском. Браузер сохраняет
+оригинальное аудио локально и отправляет его в GigaAM только через server-side
+proxy Next.js. Полученные ASR-сегменты передаются в отдельный Mura model service.
+`SpeechRecognition` используется для live preview и как fallback, если временный
+Kaggle worker недоступен.
 
 ## Архитектура интеграции
 
 ```text
-MediaRecorder + SpeechRecognition в браузере
+MediaRecorder в браузере
   ├── audio Blob → IndexedDB этого устройства
-  └── final transcript phrases
-          ↓
+  └── audio Blob → POST /api/mura/transcriptions (Next.js)
+                         └── server-only Authorization
+                                  ↓
+                         POST /v1/transcribe (Kaggle GigaAM)
+                                  ↓
+                         verified transcript segments
+                                  ↓
 POST /api/mura/extractions (Next.js)
   └── server-only Authorization
           ↓
@@ -22,11 +28,10 @@ POST /v1/extractions (Mura model FastAPI)
 localStorage metadata + detail UI
 ```
 
-Приложение не загружает audio Blob в Mura backend: model-only сервис принимает
-сегменты текста, а оригинальная запись остаётся в IndexedDB. Реализация Web Speech
-может использовать сервис производителя браузера, поэтому её privacy-поведение
-зависит от выбранного браузера. Interim-фразы `SpeechRecognition` никогда не
-отправляются в Mura.
+Extraction backend не получает audio Blob: он принимает только проверенные
+текстовые сегменты. Аудио отправляется только GigaAM worker и удаляется из его
+временной директории после обработки; оригинал остаётся в IndexedDB устройства.
+Interim-фразы `SpeechRecognition` никогда не отправляются в Mura.
 
 ## Локальный запуск
 
@@ -54,16 +59,38 @@ npm run dev
 `apps/web/.env.local`:
 
 ```dotenv
+MURA_ASR_API_URL=https://replace-with-current-tunnel.trycloudflare.com
+MURA_ASR_API_KEY=replace_with_same_kaggle_secret
+MURA_ASR_TIMEOUT_MS=295000
+MURA_ASR_MAX_UPLOAD_MB=50
 MURA_MODEL_API_URL=http://127.0.0.1:8000
 MURA_MODEL_API_KEY=replace_with_same_backend_secret
 MURA_MODEL_TIMEOUT_MS=300000
 ```
 
+`MURA_ASR_API_KEY` должен совпадать с Kaggle Secret
+`KAGGLE_ASR_API_KEY`. URL quick tunnel меняется при каждом перезапуске Kaggle,
+поэтому `MURA_ASR_API_URL` нужно обновлять новым напечатанным адресом.
 `MURA_MODEL_API_KEY` должен совпадать с отдельным `MURA_API_KEY` backend. Все
 переменные остаются server-only: не добавляйте префикс `NEXT_PUBLIC_` и не
 коммитьте `.env.local`. Frontend не содержит DeepSeek credentials.
 
-## Контракт proxy
+## Контракты proxy
+
+Браузер отправляет запись:
+
+```http
+POST /api/mura/transcriptions
+Content-Type: multipart/form-data
+
+file=<audio>
+recording_id=rec_123
+```
+
+Proxy проверяет размер и расширение, добавляет
+`Authorization: Bearer <MURA_ASR_API_KEY>` и пересылает файл в
+`${MURA_ASR_API_URL}/v1/transcribe`. Ответ GigaAM строго валидируется до
+использования в extraction pipeline.
 
 Браузер вызывает только:
 
@@ -122,16 +149,16 @@ Proxy проверяет запрос, добавляет `Authorization: Bearer
 
 ## Запись, хранение и повторный анализ
 
-1. После завершения записи audio Blob сразу сохраняется в IndexedDB.
-2. Каждая final-фраза становится отдельным `seg_001`, `seg_002`, … .
-3. Время фразы приблизительное: browser API не предоставляет ASR alignment, поэтому
-   hook использует активное время записи и сохраняет порядок без пересечений.
-4. Запрос и базовая память сохраняются до сетевого вызова.
-5. Страница `/processing?memory=...` выполняет один синхронный model request.
-6. При ошибке остаются аудио, transcript и исходный request. Кнопка «Повторить
+1. После завершения записи audio Blob сразу сохраняется в IndexedDB до сетевого
+   запроса.
+2. GigaAM возвращает полный текст и временные сегменты с provenance модели.
+3. Если Kaggle недоступен, завершённые browser-фразы используются как fallback;
+   их время приблизительное, потому что Web Speech не даёт alignment.
+4. Страница `/processing?memory=...` выполняет один синхронный extraction request.
+5. При ошибке остаются аудио, transcript и исходный request. Кнопка «Повторить
    анализ» использует сохранённые сегменты без новой записи и без автоматического
    retry loop.
-7. Старые записи localStorage нормализуются при чтении и продолжают открываться.
+6. Старые записи localStorage нормализуются при чтении и продолжают открываться.
 
 Если ни одной final-фразы нет, backend не вызывается: создаётся `audio_only`
 память с понятным сообщением. Фейковая расшифровка не подставляется.
@@ -166,8 +193,10 @@ Focused Vitest suite проверяет final-only segment mapping, locale hints
 
 ## Известные ограничения
 
-- Поддержка `SpeechRecognition` и доступные языки зависят от браузера.
-- Transcript timestamps приблизительные и не являются выравниванием по аудио.
+- Kaggle quick tunnel и GPU-сессия временные; после остановки notebook URL нужно
+  обновить.
+- Browser fallback зависит от поддержки `SpeechRecognition`; только его timestamps
+  приблизительные.
 - Аудио и archive metadata существуют только в текущем браузере/устройстве.
 - Серверной базы данных, cloud audio storage и автоматической синхронизации пока
   нет.
